@@ -4,6 +4,8 @@ app.py — AI Content Studio | 4 Tabs
 """
 import io
 import os
+import re
+import time
 from pathlib import Path
 
 import streamlit as st
@@ -12,7 +14,7 @@ from PIL import Image
 
 import data_loader
 import generator
-from generator import ASPECT_RATIOS, CONTENT_TYPES, LANGUAGES
+from generator import ASPECT_RATIOS, CONTENT_TYPES, LANGUAGES, PRESET_STYLES, MARKETING_FRAMEWORKS
 
 load_dotenv()
 
@@ -226,14 +228,36 @@ label, .stSelectbox label, .stTextArea label, .stFileUploader label,
     color: rgba(255,255,255,0.85) !important;
 }
 
-/* tabs */
+/* tabs — bar background */
+.stTabs [data-baseweb="tab-list"] {
+    background: transparent !important;
+    border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+}
+/* tabs — individual tab */
+.stTabs [data-baseweb="tab"] {
+    background: transparent !important;
+    color: rgba(255,255,255,0.55) !important;
+}
 .stTabs [data-baseweb="tab"] span,
-.stTabs [data-baseweb="tab"] div {
-    color: rgba(255,255,255,0.6) !important;
+.stTabs [data-baseweb="tab"] div,
+.stTabs [data-baseweb="tab"] p {
+    color: rgba(255,255,255,0.55) !important;
+}
+.stTabs [data-baseweb="tab"][aria-selected="true"] {
+    color: white !important;
 }
 .stTabs [data-baseweb="tab"][aria-selected="true"] span,
-.stTabs [data-baseweb="tab"][aria-selected="true"] div {
+.stTabs [data-baseweb="tab"][aria-selected="true"] div,
+.stTabs [data-baseweb="tab"][aria-selected="true"] p {
     color: white !important;
+}
+/* tab highlight bar */
+.stTabs [data-baseweb="tab-highlight"] {
+    background: linear-gradient(90deg, #7c3aed, #3b82f6) !important;
+}
+/* tab border */
+.stTabs [data-baseweb="tab-border"] {
+    background: rgba(255,255,255,0.08) !important;
 }
 
 /* file uploader — outer wrapper */
@@ -308,7 +332,7 @@ label, .stSelectbox label, .stTextArea label, .stFileUploader label,
 }
 .sidebar-section {
     font-size: 0.68rem; font-weight: 700;
-    letter-spacing: 0.15em; color: rgba(255,255,255,0.25);
+    letter-spacing: 0.15em; color: rgba(167,139,250,0.85);
     text-transform: uppercase; margin: 1.2rem 0 0.6rem 0;
 }
 #MainMenu, footer, header { visibility: hidden; }
@@ -338,12 +362,21 @@ def init_state():
         "target_audiences": [],
         "ideas_table": {},
         "generated_style_guide": "",
+        "preset_style": "none",
+        "marketing_framework": "none",
+        "post_notes": "",
+        "image_notes": "",
+        "archive": [],
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
 
 init_state()
+
+
+def _safe_filename(s: str) -> str:
+    return re.sub(r'[\\/:*?"<>|\s]', '_', s.strip())[:40]
 
 
 def check_api_keys() -> bool:
@@ -362,8 +395,7 @@ def check_api_keys() -> bool:
 def load_default_data():
     style_guide = data_loader.load_style_guide()
     post_ideas = data_loader.load_post_ideas()
-    my_images = data_loader.get_my_images()
-    return style_guide, post_ideas, my_images
+    return style_guide, post_ideas
 
 
 # ── SIDEBAR ───────────────────────────────────────────────────────────────────
@@ -377,34 +409,26 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    # ── קבצי תוכן ──
-    st.markdown('<div class="sidebar-section">📂 קבצי תוכן</div>', unsafe_allow_html=True)
-
-    uploaded_style = st.file_uploader("סגנון כתיבה (DOCX)", type=["docx"], key="style_upload")
-    if uploaded_style:
-        new_bytes = uploaded_style.read()
-        if new_bytes != st.session_state.style_bytes:
-            st.session_state.style_bytes = new_bytes
-            st.session_state.style_guide = data_loader.load_style_guide(new_bytes)
-            st.success("✓ סגנון עודכן")
-
-    uploaded_ideas = st.file_uploader("טבלת רעיונות (DOCX)", type=["docx"], key="ideas_upload")
-    if uploaded_ideas:
-        new_bytes = uploaded_ideas.read()
-        if new_bytes != st.session_state.ideas_bytes:
-            st.session_state.ideas_bytes = new_bytes
-            st.session_state.post_ideas = data_loader.load_post_ideas(new_bytes)
-            st.success("✓ רעיונות עודכנו")
-
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
-
     if not check_api_keys():
         st.stop()
 
-    default_style, default_ideas, my_images = load_default_data()
-
+    default_style, default_ideas = load_default_data()
     style_guide = st.session_state.style_guide or default_style
     post_ideas = st.session_state.post_ideas or default_ideas
+
+    # ── בחירת רעיון (MOVED TO TOP) ──
+    st.markdown('<div class="sidebar-section">💡 בחר רעיון</div>', unsafe_allow_html=True)
+    if post_ideas:
+        category = st.selectbox(
+            "קטגוריה", options=list(post_ideas.keys()), label_visibility="collapsed"
+        )
+        ideas_list = post_ideas.get(category, [])
+        idea = st.selectbox("רעיון", options=ideas_list, label_visibility="collapsed")
+    else:
+        st.warning("לא נמצאו רעיונות")
+        st.stop()
+
+    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 
     # ── שפה ──
     st.markdown('<div class="sidebar-section">🌐 שפה</div>', unsafe_allow_html=True)
@@ -425,7 +449,6 @@ with st.sidebar:
     )
     st.session_state.content_type = selected_ct
     st.caption(f"מומלץ: {CONTENT_TYPES[selected_ct]['words']} מילים")
-
     word_count_val = st.number_input(
         "כמות מילים מותאמת (0 = ברירת מחדל)",
         min_value=0, max_value=3000, value=st.session_state.word_count,
@@ -435,43 +458,100 @@ with st.sidebar:
 
     st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 
-    # ── בחירת רעיון ──
-    st.markdown('<div class="sidebar-section">💡 בחר רעיון</div>', unsafe_allow_html=True)
+    # ── סגנון כתיבה (NEW) ──
+    st.markdown('<div class="sidebar-section">✍️ סגנון כתיבה</div>', unsafe_allow_html=True)
+    style_options = ["none"] + list(PRESET_STYLES.keys())
+    style_display = ["ללא (מהמחולל)"] + [PRESET_STYLES[k]["hebrew_name"] for k in PRESET_STYLES]
+    cur_style_idx = style_options.index(st.session_state.preset_style) if st.session_state.preset_style in style_options else 0
+    selected_style_idx = st.selectbox(
+        "סגנון כתיבה",
+        options=range(len(style_options)),
+        format_func=lambda i: style_display[i],
+        index=cur_style_idx,
+        label_visibility="collapsed",
+    )
+    st.session_state.preset_style = style_options[selected_style_idx]
+    if st.session_state.preset_style != "none":
+        st.caption(PRESET_STYLES[st.session_state.preset_style]["description"])
 
-    if post_ideas:
-        category = st.selectbox(
-            "קטגוריה", options=list(post_ideas.keys()), label_visibility="collapsed"
-        )
-        ideas_list = post_ideas.get(category, [])
-        idea = st.selectbox("רעיון", options=ideas_list, label_visibility="collapsed")
-    else:
-        st.warning("לא נמצאו רעיונות")
-        st.stop()
+    # ── מסגרת שיווקית (NEW) ──
+    st.markdown('<div class="sidebar-section">📊 מסגרת שיווקית</div>', unsafe_allow_html=True)
+    fw_keys = list(MARKETING_FRAMEWORKS.keys())
+    fw_display = [MARKETING_FRAMEWORKS[k]["name"] for k in fw_keys]
+    cur_fw_idx = fw_keys.index(st.session_state.marketing_framework) if st.session_state.marketing_framework in fw_keys else 0
+    selected_fw_idx = st.selectbox(
+        "מסגרת שיווקית",
+        options=range(len(fw_keys)),
+        format_func=lambda i: fw_display[i],
+        index=cur_fw_idx,
+        label_visibility="collapsed",
+        key="sb_marketing_fw",
+    )
+    st.session_state.marketing_framework = fw_keys[selected_fw_idx]
+    if st.session_state.marketing_framework != "none":
+        st.caption(MARKETING_FRAMEWORKS[st.session_state.marketing_framework]["description"])
 
     st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 
-    # ── תמונת פנים (fallback) ──
-    st.markdown('<div class="sidebar-section">🖼 תמונת פנים</div>', unsafe_allow_html=True)
-
+    # ── תמונת ייחוס (SIMPLIFIED — no my_images gallery) ──
+    st.markdown('<div class="sidebar-section">🖼 תמונת ייחוס</div>', unsafe_allow_html=True)
     if st.session_state.character_image_bytes:
-        st.caption("✓ משתמש בדמות שהועלתה (Tab הגדרות)")
+        st.image(st.session_state.character_image_bytes, use_container_width=True)
+        st.caption("✓ תמונת ייחוס פעילה — עדכון בטאב הגדרות ויזואל")
         face_source = st.session_state.character_image_bytes
-    elif my_images:
-        image_names = [p.name for p in my_images]
-        selected_name = st.selectbox(
-            "בחר תמונה", options=image_names, label_visibility="collapsed"
-        )
-        face_path = next(p for p in my_images if p.name == selected_name)
-        st.image(str(face_path), use_container_width=True)
-        face_source = face_path
     else:
-        st.warning("לא נמצאו תמונות — העלה דמות ב-Tab הגדרות")
+        st.info("העלה תמונת ייחוס בטאב הגדרות ויזואל")
         face_source = None
+
+    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
+
+    # ── הערות מיוחדות (NEW) ──
+    st.markdown('<div class="sidebar-section">📝 הערות מיוחדות</div>', unsafe_allow_html=True)
+    post_notes_val = st.text_area(
+        "הערות לפוסט",
+        value=st.session_state.post_notes,
+        height=80,
+        key="sb_post_notes",
+        placeholder="הוסף הנחיות ספציפיות לפוסט...",
+    )
+    st.session_state.post_notes = post_notes_val
+
+    image_notes_val = st.text_area(
+        "הערות לתמונה",
+        value=st.session_state.image_notes,
+        height=80,
+        key="sb_image_notes",
+        placeholder="הוסף הנחיות ספציפיות לתמונה...",
+    )
+    st.session_state.image_notes = image_notes_val
 
     st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 
     # ── כפתור יצירה ──
     generate_btn = st.button("✦ צור פוסט + תמונה", use_container_width=True)
+
+    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
+
+    # ── קבצי תוכן (MOVED TO BOTTOM) ──
+    st.markdown('<div class="sidebar-section">📂 קבצי תוכן</div>', unsafe_allow_html=True)
+
+    uploaded_style = st.file_uploader("סגנון כתיבה (DOCX)", type=["docx"], key="style_upload")
+    if uploaded_style:
+        new_bytes = uploaded_style.read()
+        if new_bytes != st.session_state.style_bytes:
+            st.session_state.style_bytes = new_bytes
+            st.session_state.style_guide = data_loader.load_style_guide(new_bytes)
+            st.success("✓ סגנון עודכן")
+
+    uploaded_ideas = st.file_uploader("טבלת רעיונות (DOCX)", type=["docx"], key="ideas_upload")
+    if uploaded_ideas:
+        new_bytes = uploaded_ideas.read()
+        if new_bytes != st.session_state.ideas_bytes:
+            st.session_state.ideas_bytes = new_bytes
+            st.session_state.post_ideas = data_loader.load_post_ideas(new_bytes)
+            st.success("✓ רעיונות עודכנו")
+
+    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 
     col_s1, col_s2 = st.columns(2)
     with col_s1:
@@ -492,11 +572,12 @@ st.markdown(
 )
 
 # ── TABS ──────────────────────────────────────────────────────────────────────
-tab_create, tab_visual, tab_ideas, tab_style = st.tabs([
+tab_create, tab_visual, tab_ideas, tab_style, tab_archive = st.tabs([
     "🏠 יצירה",
     "🎨 הגדרות ויזואל",
     "💡 מחולל רעיונות",
     "✍️ מחולל סגנון",
+    "🗂 ארכיון",
 ])
 
 
@@ -526,11 +607,13 @@ with tab_create:
     # ── יצירה ──
     if generate_btn:
         if not face_source:
-            st.error("יש לבחור תמונת פנים או להעלות דמות בטאב הגדרות ויזואל")
+            st.error("יש להעלות תמונת ייחוס בטאב הגדרות ויזואל")
             st.stop()
 
         wc = st.session_state.word_count if st.session_state.word_count > 0 else None
         effective_style = st.session_state.generated_style_guide or style_guide
+        preset_instr = PRESET_STYLES[st.session_state.preset_style]["prompt_instruction"] if st.session_state.preset_style != "none" else ""
+        fw_instr = MARKETING_FRAMEWORKS[st.session_state.marketing_framework]["structure"] if st.session_state.marketing_framework != "none" else ""
 
         col_prog, _ = st.columns([2, 1])
         with col_prog:
@@ -543,6 +626,9 @@ with tab_create:
                 language=st.session_state.language,
                 content_type=st.session_state.content_type,
                 word_count=wc,
+                preset_style_instruction=preset_instr,
+                marketing_framework=fw_instr,
+                post_notes=st.session_state.post_notes,
             )
         except Exception as e:
             st.error(f"שגיאה ביצירת פוסט: {e}")
@@ -561,6 +647,8 @@ with tab_create:
         progress.progress(50, text="🎨 מייצר תמונה (30-60 שניות)...")
         try:
             scene = generator.generate_image_prompt(st.session_state.post_text)
+            if st.session_state.image_notes:
+                scene = f"{scene}. Additional direction: {st.session_state.image_notes}"
             st.session_state.image_bytes = generator.generate_image(
                 face_source, scene,
                 aspect_ratio=st.session_state.aspect_ratio,
@@ -576,7 +664,25 @@ with tab_create:
 
         outputs_dir = data_loader.ensure_outputs_dir()
         if st.session_state.post_text and st.session_state.image_bytes:
-            generator.save_outputs(st.session_state.post_text, st.session_state.image_bytes, outputs_dir)
+            generator.save_outputs(
+                st.session_state.post_text, st.session_state.image_bytes, outputs_dir,
+                category=category, idea=idea,
+            )
+            archive_entry = {
+                "post_text": st.session_state.post_text,
+                "image_bytes": st.session_state.image_bytes,
+                "category": category,
+                "idea": idea,
+                "content_type": st.session_state.content_type,
+                "language": st.session_state.language,
+                "preset_style": PRESET_STYLES[st.session_state.preset_style]["hebrew_name"] if st.session_state.preset_style != "none" else "ללא",
+                "marketing_framework": st.session_state.marketing_framework,
+                "timestamp": int(time.time()),
+                "timestamp_str": time.strftime("%d/%m/%Y %H:%M"),
+            }
+            st.session_state.archive.append(archive_entry)
+            if len(st.session_state.archive) > 20:
+                st.session_state.archive = st.session_state.archive[-20:]
 
     # ── תצוגת תוצאות ──
     col_post, col_img = st.columns([1, 1], gap="large")
@@ -590,13 +696,36 @@ with tab_create:
             )
             c1, c2 = st.columns(2)
             with c1:
+                dl_name_post = f"{_safe_filename(category)}_{_safe_filename(idea)}.txt" if 'category' in dir() else "post.txt"
                 st.download_button(
                     "⬇ הורד טקסט", data=edited.encode("utf-8"),
-                    file_name="post.txt", mime="text/plain", use_container_width=True,
+                    file_name=dl_name_post, mime="text/plain", use_container_width=True,
                 )
             with c2:
                 if st.button("📋 העתק", use_container_width=True):
                     st.write("הועתק!")
+            if st.button("🔄 נסה שוב — פוסט בלבד", key="retry_post_btn", use_container_width=True):
+                if not face_source:
+                    st.error("יש להעלות תמונת ייחוס")
+                else:
+                    with st.spinner("מחדש פוסט..."):
+                        try:
+                            wc = st.session_state.word_count if st.session_state.word_count > 0 else None
+                            effective_style = st.session_state.generated_style_guide or style_guide
+                            preset_instr = PRESET_STYLES[st.session_state.preset_style]["prompt_instruction"] if st.session_state.preset_style != "none" else ""
+                            fw_instr = MARKETING_FRAMEWORKS[st.session_state.marketing_framework]["structure"] if st.session_state.marketing_framework != "none" else ""
+                            st.session_state.post_text = generator.generate_post(
+                                effective_style, category, idea,
+                                language=st.session_state.language,
+                                content_type=st.session_state.content_type,
+                                word_count=wc,
+                                preset_style_instruction=preset_instr,
+                                marketing_framework=fw_instr,
+                                post_notes=st.session_state.post_notes,
+                            )
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"שגיאה: {e}")
         else:
             st.markdown("""
             <div class="glass-card" style="min-height:480px; display:flex; align-items:center; justify-content:center; text-align:center;">
@@ -611,10 +740,37 @@ with tab_create:
         st.markdown('<div class="section-label">🖼 התמונה</div>', unsafe_allow_html=True)
         if st.session_state.image_bytes:
             st.image(st.session_state.image_bytes, use_container_width=True)
+            dl_name_img = f"{_safe_filename(category)}_{_safe_filename(idea)}.png" if 'category' in dir() else "post_image.png"
             st.download_button(
                 "⬇ הורד תמונה", data=st.session_state.image_bytes,
-                file_name="post_image.png", mime="image/png", use_container_width=True,
+                file_name=dl_name_img, mime="image/png", use_container_width=True,
             )
+            if st.button("🔄 נסה שוב — תמונה בלבד", key="retry_image_btn", use_container_width=True):
+                if not face_source:
+                    st.error("יש להעלות תמונת ייחוס")
+                elif not st.session_state.post_text:
+                    st.error("יש לצור פוסט תחילה")
+                else:
+                    with st.spinner("מחדש תמונה (30-60 שניות)..."):
+                        try:
+                            image_text = ""
+                            if st.session_state.add_text_to_image:
+                                image_text = generator.generate_text_for_image(
+                                    st.session_state.post_text, st.session_state.language
+                                )
+                            scene = generator.generate_image_prompt(st.session_state.post_text)
+                            if st.session_state.image_notes:
+                                scene = f"{scene}. Additional direction: {st.session_state.image_notes}"
+                            st.session_state.image_bytes = generator.generate_image(
+                                face_source, scene,
+                                aspect_ratio=st.session_state.aspect_ratio,
+                                style_description=st.session_state.style_description,
+                                add_text=st.session_state.add_text_to_image,
+                                text_content=image_text,
+                            )
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"שגיאה: {e}")
         else:
             st.markdown("""
             <div class="glass-card" style="min-height:480px; display:flex; align-items:center; justify-content:center; text-align:center;">
@@ -633,9 +789,9 @@ with tab_visual:
     col_char, col_style_img = st.columns(2, gap="large")
 
     with col_char:
-        st.markdown('<div class="section-label">👤 תמונת דמות</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-label">📸 תמונת ייחוס</div>', unsafe_allow_html=True)
         uploaded_char = st.file_uploader(
-            "העלה תמונת דמות",
+            "העלה תמונת ייחוס (פנים, אביזר, מוצר, אנשים...)",
             type=["jpg", "jpeg", "png", "webp"],
             key="char_upload",
         )
@@ -643,17 +799,17 @@ with tab_visual:
             char_bytes = uploaded_char.read()
             if char_bytes != st.session_state.character_image_bytes:
                 st.session_state.character_image_bytes = char_bytes
-                st.success("✓ תמונת דמות נשמרה")
+                st.rerun()  # rerun so sidebar renders with the new image
 
         if st.session_state.character_image_bytes:
             st.image(st.session_state.character_image_bytes, use_container_width=True)
-            if st.button("🗑 הסר דמות", key="remove_char"):
+            if st.button("🗑 הסר תמונה", key="remove_char"):
                 st.session_state.character_image_bytes = None
                 st.rerun()
         else:
             st.markdown("""
             <div class="glass-card" style="min-height:200px; display:flex; align-items:center; justify-content:center; text-align:center;">
-                <div style="color:rgba(255,255,255,0.25); font-size:0.9rem;">העלה תמונה לשמירת זהות הדמות</div>
+                <div style="color:rgba(255,255,255,0.25); font-size:0.9rem;">העלה תמונת ייחוס — פנים, מוצר, אביזר, קבוצת אנשים, לוגו...</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -666,9 +822,9 @@ with tab_visual:
             key="style_img_upload",
         )
         if uploaded_styles:
-            style_bytes_list = [f.read() for f in uploaded_styles]
+            style_bytes_list = [f.read() for f in uploaded_styles][:10]
             st.session_state.style_image_list = style_bytes_list
-            st.caption(f"{len(style_bytes_list)} תמונות הועלו")
+            st.caption(f"{len(style_bytes_list)}/10 תמונות הועלו")
 
         if st.session_state.style_image_list:
             if st.button("🔍 נתח סגנון", key="analyze_style_btn", use_container_width=True):
@@ -806,7 +962,46 @@ with tab_ideas:
 # TAB 4 — מחולל סגנון כתיבה
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab_style:
-    st.markdown('<div class="section-label">✍️ סגנון כתיבה</div>', unsafe_allow_html=True)
+    # ── סגנונות מוכנים (NEW) ──
+    st.markdown('<div class="section-label">✦ סגנונות כתיבה מוכנים</div>', unsafe_allow_html=True)
+
+    preset_options_tab = ["none"] + list(PRESET_STYLES.keys())
+    preset_display_tab = ["ללא — השתמש במחולל הסגנון שלמטה"] + [
+        f"{PRESET_STYLES[k]['hebrew_name']} ({PRESET_STYLES[k]['name']})"
+        for k in PRESET_STYLES
+    ]
+    cur_preset_tab_idx = preset_options_tab.index(st.session_state.preset_style) if st.session_state.preset_style in preset_options_tab else 0
+    selected_preset_tab_idx = st.selectbox(
+        "בחר סגנון כתיבה מוכן",
+        options=range(len(preset_options_tab)),
+        format_func=lambda i: preset_display_tab[i],
+        index=cur_preset_tab_idx,
+        key="tab4_preset_select",
+        label_visibility="collapsed",
+    )
+    selected_preset_key = preset_options_tab[selected_preset_tab_idx]
+
+    if selected_preset_key != "none":
+        preset_data = PRESET_STYLES[selected_preset_key]
+        st.markdown(f"""
+        <div class="glass-card">
+            <div style="font-size:1.05rem; font-weight:600; margin-bottom:0.4rem;">{preset_data['hebrew_name']} — {preset_data['name']}</div>
+            <div style="color:rgba(255,255,255,0.6); font-size:0.88rem; margin-bottom:0.6rem;">{preset_data['description']}</div>
+            <div style="color:rgba(255,255,255,0.55); font-size:0.82rem; white-space:pre-wrap; direction:rtl; text-align:right;">{preset_data.get('summary', preset_data['description'])}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("✅ החל סגנון זה", key="apply_preset_from_tab4"):
+            st.session_state.preset_style = selected_preset_key
+            st.rerun()
+    else:
+        if st.session_state.preset_style != "none":
+            if st.button("🗑 נקה סגנון מוכן", key="clear_preset_tab4"):
+                st.session_state.preset_style = "none"
+                st.rerun()
+        st.info("בחר סגנון מוכן מהרשימה, או השתמש במחולל הסגנון האישי שלמטה.")
+
+    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">✍️ מחולל סגנון אישי</div>', unsafe_allow_html=True)
 
     # ── בחירת מסלול ──
     if "style_mode" not in st.session_state:
@@ -957,3 +1152,71 @@ with tab_style:
             if st.button("🗑 נקה", key="clear_style_guide_btn", use_container_width=True):
                 st.session_state.generated_style_guide = ""
                 st.rerun()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB 5 — ארכיון
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab_archive:
+    st.markdown('<div class="section-label">🗂 ארכיון גנרציות</div>', unsafe_allow_html=True)
+
+    archive = st.session_state.archive
+
+    if not archive:
+        st.markdown("""
+        <div class="glass-card" style="text-align:center; min-height:200px; display:flex; align-items:center; justify-content:center;">
+            <div>
+                <div style="font-size:3rem; opacity:0.3; margin-bottom:1rem;">🗂</div>
+                <div style="color:rgba(255,255,255,0.25); font-size:0.9rem;">הגנרציות יופיעו כאן לאחר שתייצר תוכן</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        col_arc_hdr, col_arc_clear = st.columns([3, 1])
+        with col_arc_hdr:
+            st.caption(f"{len(archive)} גנרציות בארכיון")
+        with col_arc_clear:
+            if st.button("🗑 נקה ארכיון", key="clear_archive_btn"):
+                st.session_state.archive = []
+                st.rerun()
+
+        for i, entry in enumerate(reversed(archive)):
+            idx = len(archive) - 1 - i
+            expander_label = f"[{entry['timestamp_str']}] {entry['category']} — {entry['idea'][:50]}"
+            with st.expander(expander_label, expanded=(i == 0)):
+                col_arc_post, col_arc_img = st.columns([1, 1], gap="large")
+
+                with col_arc_post:
+                    st.markdown('<div class="section-label">📝 פוסט</div>', unsafe_allow_html=True)
+                    st.text_area(
+                        "",
+                        value=entry["post_text"],
+                        height=300,
+                        key=f"arc_post_{idx}",
+                        label_visibility="collapsed",
+                    )
+                    meta = f"{entry['content_type']} · {entry['language']} · {entry['preset_style']} · {entry['marketing_framework']}"
+                    st.caption(meta)
+                    safe_cat = _safe_filename(entry["category"])
+                    safe_idea = _safe_filename(entry["idea"])
+                    st.download_button(
+                        "⬇ הורד טקסט",
+                        data=entry["post_text"].encode("utf-8"),
+                        file_name=f"{safe_cat}_{safe_idea}_{entry['timestamp']}.txt",
+                        mime="text/plain",
+                        use_container_width=True,
+                        key=f"arc_dl_post_{idx}",
+                    )
+
+                with col_arc_img:
+                    st.markdown('<div class="section-label">🖼 תמונה</div>', unsafe_allow_html=True)
+                    if entry.get("image_bytes"):
+                        st.image(entry["image_bytes"], use_container_width=True)
+                        st.download_button(
+                            "⬇ הורד תמונה",
+                            data=entry["image_bytes"],
+                            file_name=f"{safe_cat}_{safe_idea}_{entry['timestamp']}.png",
+                            mime="image/png",
+                            use_container_width=True,
+                            key=f"arc_dl_img_{idx}",
+                        )

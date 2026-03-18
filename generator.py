@@ -29,7 +29,135 @@ CONTENT_TYPES = {
     "Article":     {"label": "📰 מאמר",        "words": "500–1000"},
 }
 
-LANGUAGES = ["עברית", "English", "Español", "Français", "العربية", "Deutsch"]
+LANGUAGES = ["עברית", "English", "Español", "Français", "العربية", "Deutsch", "Русский"]
+
+def _parse_summaries(summary_path: Path) -> dict:
+    """Extract each style's summary block from the summary file. Returns {hebrew_name: summary_text}."""
+    try:
+        content = summary_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return {}
+    # Split on numbered headings like "## 1. " ... "## 2. "
+    sections = re.split(r'\n## \d+\.', content)
+    result = {}
+    for section in sections[1:]:
+        lines = section.strip().splitlines()
+        first_line = lines[0].strip()
+        # Hebrew name is before the opening parenthesis, e.g. "המספר סיפור (Story-driven)"
+        m = re.match(r'^(.+?)\s*\(', first_line)
+        if m:
+            hebrew_name = m.group(1).strip()
+            result[hebrew_name] = section.strip()
+    return result
+
+
+def _load_preset_styles() -> dict:
+    """Loads writing styles from the '10 writing styles' folder."""
+    styles_dir = Path(__file__).parent / "10 writing styles"
+
+    # (key, filename_hebrew, english_name, summary_lookup_key)
+    # summary_lookup_key is the name as it appears in the summary file (may differ from filename)
+    STYLE_META = [
+        ("story_driven",      "המספר סיפור",         "Story-driven Authority", None),
+        ("myth_breaker",      "המפצח מיתוסים",        "Myth Breaker",           None),
+        ("action_driver",     "המפעיל לפעולה",        "Action Driver",          None),
+        ("simple_explainer",  "המסביר הפשוט",         "Complex → Simple",       None),
+        ("thought_provoker",  "הפרובוקטור החכם",      "Thought Provoker",       None),
+        ("reflection",        "המראה",                "Reflection Writer",      None),
+        ("proof_driven",      "המוכיח",               "Proof-driven",           None),
+        ("framework_builder", "המבנה",                "Framework Builder",      None),
+        ("twist_story",       "סיפור עם טוויסט",      "Expectation Breaker",    "הסיפור עם הטוויסט"),
+        ("smart_sarcasm",     "הומור סרקסטי חכם",     "Smart Sarcasm",          None),
+    ]
+
+    summaries = _parse_summaries(styles_dir / "תקציר 10 סגנונות כתיבה.txt")
+
+    result = {}
+    for key, hebrew_name, english_name, summary_key in STYLE_META:
+        # Full detailed instructions used for generation
+        file_path = styles_dir / f"{hebrew_name}.txt"
+        try:
+            instruction = file_path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            instruction = f"Write in the style of '{hebrew_name}'."
+        # Brief summary shown in the UI — look up by summary_key if filename differs
+        lookup = summary_key or hebrew_name
+        summary = summaries.get(lookup, "")
+        # One-liner description: the "מהות" line from the summary block
+        m = re.search(r'### מהות\s*\n(.+)', summary)
+        description = m.group(1).strip() if m else ""
+        result[key] = {
+            "name": english_name,
+            "hebrew_name": hebrew_name,
+            "description": description,   # one-liner for sidebar caption
+            "summary": summary,           # full summary block for Tab 4 UI
+            "prompt_instruction": instruction,  # detailed instructions for generation only
+        }
+    return result
+
+PRESET_STYLES = _load_preset_styles()
+
+MARKETING_FRAMEWORKS = {
+    "none": {
+        "name": "ללא מסגרת",
+        "description": "ללא מסגרת שיווקית ספציפית",
+        "structure": "",
+    },
+    "AIDA": {
+        "name": "AIDA",
+        "description": "Attention → Interest → Desire → Action",
+        "structure": (
+            "Structure the post using AIDA: "
+            "1. Attention — grab attention with a bold opening line or question. "
+            "2. Interest — build interest by presenting the problem or an intriguing angle. "
+            "3. Desire — create desire by showing the transformation or benefit. "
+            "4. Action — close with a clear call to action."
+        ),
+    },
+    "PAS": {
+        "name": "PAS",
+        "description": "Problem → Agitate → Solution",
+        "structure": (
+            "Structure the post using PAS: "
+            "1. Problem — identify a specific, relatable problem the reader faces. "
+            "2. Agitate — intensify the pain by exploring the consequences of not solving it. "
+            "3. Solution — present the insight or solution clearly and compellingly."
+        ),
+    },
+    "STAR": {
+        "name": "STAR",
+        "description": "Situation → Task → Action → Result",
+        "structure": (
+            "Structure the post using STAR: "
+            "1. Situation — set the scene with a specific context or moment. "
+            "2. Task — describe the challenge or goal at hand. "
+            "3. Action — explain what was done or decided. "
+            "4. Result — share the outcome and the lesson it revealed."
+        ),
+    },
+    "FAB": {
+        "name": "FAB",
+        "description": "Features → Advantages → Benefits",
+        "structure": (
+            "Structure the post using FAB: "
+            "1. Features — describe what it is or what happened (the fact). "
+            "2. Advantages — explain why that matters or what it enables. "
+            "3. Benefits — connect it to the reader's life and the personal value they receive."
+        ),
+    },
+    "StoryBrand": {
+        "name": "StoryBrand",
+        "description": "Character → Problem → Guide → Plan → Success",
+        "structure": (
+            "Structure the post using StoryBrand: "
+            "1. Character — establish the reader as the hero facing a challenge. "
+            "2. Problem — name the external, internal, and philosophical problem. "
+            "3. Guide — position yourself as the empathetic guide with a solution. "
+            "4. Plan — give a simple, clear path forward. "
+            "5. Success — paint the picture of the transformed outcome."
+        ),
+    },
+}
 
 ASPECT_RATIOS = {
     "מרובע (1:1)":  "1:1",
@@ -54,13 +182,20 @@ STYLE_WRAPPER = (
 def generate_post(style_guide: str, category: str, idea: str,
                   language: str = "עברית",
                   content_type: str = "LinkedIn",
-                  word_count: int | None = None) -> str:
+                  word_count: int | None = None,
+                  preset_style_instruction: str = "",
+                  marketing_framework: str = "",
+                  post_notes: str = "") -> str:
     """מייצר פוסט בשפה ובסגנון הנבחרים."""
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
     ct_info = CONTENT_TYPES.get(content_type, {})
     word_range = ct_info.get("words", "150–300")
     word_instruction = f"{word_count}" if word_count else word_range
+
+    style_block = f"\nWriting Style Instruction:\n{preset_style_instruction}" if preset_style_instruction else ""
+    framework_block = f"\nMarketing Framework:\n{marketing_framework}" if marketing_framework else ""
+    notes_block = f"\nSpecial Notes for This Post:\n{post_notes}" if post_notes else ""
 
     prompt = f"""You are a professional content writer creating a {content_type} post.
 
@@ -87,6 +222,7 @@ Rules:
 - Rhetorical questions
 - Don't preach — let the insight grow from the story
 - Rich but not formal language
+{style_block}{framework_block}{notes_block}
 - Return only the post text, no titles or explanations"""
 
     message = client.messages.create(
@@ -389,11 +525,21 @@ def generate_writing_style(samples: list[str]) -> str:
     return message.content[0].text.strip()
 
 
-def save_outputs(post_text: str, image_bytes: bytes, outputs_dir: Path) -> tuple[Path, Path]:
+def save_outputs(post_text: str, image_bytes: bytes, outputs_dir: Path,
+                 category: str = "", idea: str = "") -> tuple[Path, Path]:
     """שומר פוסט ותמונה לתיקיית outputs."""
     timestamp = int(time.time())
-    post_path = outputs_dir / f"post_{timestamp}.txt"
-    image_path = outputs_dir / f"image_{timestamp}.png"
+
+    def _sanitize(s: str) -> str:
+        return re.sub(r'[\\/:*?"<>|]', '_', s.strip())[:30]
+
+    if category and idea:
+        slug = f"{_sanitize(category)}_{_sanitize(idea)}_{timestamp}"
+    else:
+        slug = str(timestamp)
+
+    post_path = outputs_dir / f"post_{slug}.txt"
+    image_path = outputs_dir / f"image_{slug}.png"
 
     post_path.write_text(post_text, encoding="utf-8")
     image_path.write_bytes(image_bytes)
