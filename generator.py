@@ -124,17 +124,6 @@ MARKETING_FRAMEWORKS = {
             "3. Solution — present the insight or solution clearly and compellingly."
         ),
     },
-    "STAR": {
-        "name": "STAR",
-        "description": "Situation → Task → Action → Result",
-        "structure": (
-            "Structure the post using STAR: "
-            "1. Situation — set the scene with a specific context or moment. "
-            "2. Task — describe the challenge or goal at hand. "
-            "3. Action — explain what was done or decided. "
-            "4. Result — share the outcome and the lesson it revealed."
-        ),
-    },
     "FAB": {
         "name": "FAB",
         "description": "Features → Advantages → Benefits",
@@ -145,16 +134,25 @@ MARKETING_FRAMEWORKS = {
             "3. Benefits — connect it to the reader's life and the personal value they receive."
         ),
     },
-    "StoryBrand": {
-        "name": "StoryBrand",
-        "description": "Character → Problem → Guide → Plan → Success",
+    "BAB": {
+        "name": "Before-After-Bridge (BAB)",
+        "description": "Before → After → Bridge",
         "structure": (
-            "Structure the post using StoryBrand: "
-            "1. Character — establish the reader as the hero facing a challenge. "
-            "2. Problem — name the external, internal, and philosophical problem. "
-            "3. Guide — position yourself as the empathetic guide with a solution. "
-            "4. Plan — give a simple, clear path forward. "
-            "5. Success — paint the picture of the transformed outcome."
+            "Structure the post using Before-After-Bridge (BAB): "
+            "1. Before — describe the reader's current painful or frustrating situation. "
+            "2. After — paint a vivid picture of the desired outcome after the problem is solved. "
+            "3. Bridge — present the path (your insight, product, or approach) that gets them there."
+        ),
+    },
+    "4Ps": {
+        "name": "4Ps",
+        "description": "Promise → Picture → Proof → Push",
+        "structure": (
+            "Structure the post using 4Ps: "
+            "1. Promise — open with a bold, specific promise or key benefit. "
+            "2. Picture — help the reader vividly imagine the result in their life. "
+            "3. Proof — back it up with a fact, testimonial, stat, or real example. "
+            "4. Push — close with a direct, compelling call to action."
         ),
     },
 }
@@ -193,13 +191,27 @@ def generate_post(style_guide: str, category: str, idea: str,
     word_range = ct_info.get("words", "150–300")
     word_instruction = f"{word_count}" if word_count else word_range
 
-    style_block = f"\nWriting Style Instruction:\n{preset_style_instruction}" if preset_style_instruction else ""
-    framework_block = f"\nMarketing Framework:\n{marketing_framework}" if marketing_framework else ""
+    style_block = f"\nAdditional Style Layer:\n{preset_style_instruction}" if preset_style_instruction else ""
     notes_block = f"\nSpecial Notes for This Post:\n{post_notes}" if post_notes else ""
+
+    if marketing_framework:
+        structure_block = f"""
+Post Structure (Marketing Model):
+The post must be structured according to the following marketing model, applied THROUGH the writer's personal voice and style — not as a template, but as the underlying logic that shapes the arc of the post:
+{marketing_framework}
+
+The writing should feel personal, human, and consistent with the style guide above. The marketing model provides the skeleton; the style guide provides the flesh. Do not label the sections — let the structure emerge naturally from the writing."""
+    else:
+        structure_block = """
+Post Structure:
+1. Personal short story from daily life (concrete situation, dialogue, memory)
+2. Emotional moment — confusion, doubt, small surprise
+3. Natural transition to professional insight (psychology, behavior, AI)
+4. Sharp closing sentence the reader takes with them"""
 
     prompt = f"""You are a professional content writer creating a {content_type} post.
 
-Style guide:
+Style guide (voice, tone, and writing DNA — follow closely):
 {style_guide}
 
 Category: {category}
@@ -209,21 +221,16 @@ Instructions:
 - Write in {language}
 - Target length: approximately {word_instruction} words
 - Platform: {content_type}
-- Follow the style guide closely
-
-Structure:
-1. Personal short story from daily life (concrete situation, dialogue, memory)
-2. Emotional moment — confusion, doubt, small surprise
-3. Natural transition to professional insight (psychology, behavior, AI)
-4. Sharp closing sentence the reader takes with them
+- The style guide is the primary authority on voice and tone
+{structure_block}
 
 Rules:
 - Short paragraphs (2-4 lines), lots of white space
-- Rhetorical questions
-- Don't preach — let the insight grow from the story
+- Rhetorical questions where natural
+- Don't preach — let the insight emerge from the story
 - Rich but not formal language
-{style_block}{framework_block}{notes_block}
-- Return only the post text, no titles or explanations"""
+{style_block}{notes_block}
+- Return only the post text, no titles, labels, or explanations"""
 
     message = client.messages.create(
         model=ANTHROPIC_MODEL,
@@ -420,6 +427,36 @@ def analyze_style_images(image_bytes_list: list[bytes]) -> str:
         }],
     )
     return merge_message.content[0].text.strip()
+
+
+def enhance_style_description(raw_description: str) -> str:
+    """
+    מקבל תיאור סגנון ויזואלי בכתיבה חופשית ומחזיר גרסה משופרת,
+    מנוסחת כהנחיה מקצועית לייצור תמונה (image generation prompt style).
+    """
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+
+    prompt = f"""You are an expert AI image prompt engineer.
+The user has written a rough style description for images they want to generate.
+Your task: rewrite it as a rich, professional visual style description that works perfectly as an image generation style guide.
+
+User's raw description:
+{raw_description}
+
+Rules:
+- Expand and enrich: add lighting details, color palette specifics, mood, atmosphere, composition style, texture, and cinematic qualities
+- Keep the user's original intent and aesthetic direction
+- Write in English (image generation models work best with English style prompts)
+- Be specific and vivid — no vague words like "nice" or "good"
+- Output ONLY the enhanced description, no explanations or headers
+- Length: 3-5 sentences, dense with visual detail"""
+
+    response = client.messages.create(
+        model=ANTHROPIC_MODEL,
+        max_tokens=400,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.content[0].text.strip()
 
 
 def generate_target_audiences(domain: str, language: str = "עברית") -> list[str]:

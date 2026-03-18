@@ -21,11 +21,13 @@ CATEGORY_LABELS = {
 }
 
 
-def load_style_guide(file_bytes: bytes | None = None) -> str:
+def load_style_guide(file_bytes: bytes | None = None, suffix: str = "docx") -> str:
     """קורא את מדריך הסגנון ומחזיר כ-string.
     אם file_bytes ניתן — קורא מזה, אחרת מהקובץ הברירת מחדל."""
     import io
     if file_bytes:
+        if suffix == "pdf":
+            return _load_style_from_pdf(file_bytes)
         doc = Document(io.BytesIO(file_bytes))
     else:
         doc = Document(STYLE_GUIDE_PATH)
@@ -33,7 +35,16 @@ def load_style_guide(file_bytes: bytes | None = None) -> str:
     return "\n".join(paragraphs)
 
 
-def load_post_ideas(file_bytes: bytes | None = None) -> dict[str, list[str]]:
+def _load_style_from_pdf(file_bytes: bytes) -> str:
+    """מחלץ טקסט ממדריך סגנון בפורמט PDF."""
+    import io
+    import pypdf
+    reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+    pages = [page.extract_text() or "" for page in reader.pages]
+    return "\n".join(p.strip() for p in pages if p.strip())
+
+
+def load_post_ideas(file_bytes: bytes | None = None, suffix: str = "docx") -> dict[str, list[str]]:
     """
     קורא את טבלת הרעיונות ומחזיר dict:
     {
@@ -44,6 +55,10 @@ def load_post_ideas(file_bytes: bytes | None = None) -> dict[str, list[str]]:
     """
     import io
     if file_bytes:
+        if suffix == "xlsx":
+            return _load_ideas_from_xlsx(file_bytes)
+        if suffix == "pdf":
+            return _load_ideas_from_pdf(file_bytes)
         doc = Document(io.BytesIO(file_bytes))
     else:
         doc = Document(IDEAS_PATH)
@@ -88,6 +103,54 @@ def _parse_ideas_from_paragraphs(doc: Document) -> dict[str, list[str]]:
         elif current_category:
             result[current_category].append(text)
     return result
+
+
+def _load_ideas_from_pdf(file_bytes: bytes) -> dict[str, list[str]]:
+    """מחלץ רעיונות מ-PDF. מצפה לפורמט: שורת כותרת (קטגוריה) ואחריה שורות רעיונות."""
+    import io
+    import pypdf
+    reader = pypdf.PdfReader(io.BytesIO(file_bytes))
+    lines = []
+    for page in reader.pages:
+        text = page.extract_text() or ""
+        lines.extend(line.strip() for line in text.splitlines() if line.strip())
+
+    ideas: dict[str, list[str]] = {}
+    current_category: str | None = None
+    for line in lines:
+        # Strip common bullet/numbering prefixes
+        clean = line.lstrip("•●▪-–—0123456789.) ").strip()
+        if not clean:
+            continue
+        # Heuristic: a short line with no leading bullet is a category header
+        is_bullet = line != clean or len(clean) > 80
+        if not is_bullet and len(clean) < 50:
+            current_category = clean
+            if current_category not in ideas:
+                ideas[current_category] = []
+        elif current_category and clean:
+            ideas[current_category].append(clean)
+
+    return ideas
+
+
+def _load_ideas_from_xlsx(file_bytes: bytes) -> dict[str, list[str]]:
+    """קורא טבלת רעיונות מקובץ XLSX. כל שורה: תא ראשון = קטגוריה, שאר התאים = רעיונות."""
+    import io
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+    ws = wb.active
+    ideas: dict[str, list[str]] = {}
+    for row in ws.iter_rows(values_only=True):
+        if not row or not row[0]:
+            continue
+        category = str(row[0]).strip()
+        if not category:
+            continue
+        row_ideas = [str(c).strip() for c in row[1:] if c]
+        if row_ideas:
+            ideas[category] = row_ideas
+    return ideas
 
 
 def get_my_images() -> list[Path]:
