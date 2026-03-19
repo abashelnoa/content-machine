@@ -99,7 +99,7 @@ PRESET_STYLES = _load_preset_styles()
 
 MARKETING_FRAMEWORKS = {
     "none": {
-        "name": "ללא מסגרת",
+        "name": "ללא מודל כתיבה שיווקית",
         "description": "ללא מסגרת שיווקית ספציפית",
         "structure": "",
     },
@@ -158,11 +158,11 @@ MARKETING_FRAMEWORKS = {
 }
 
 ASPECT_RATIOS = {
-    "מרובע (1:1)":  "1:1",
-    "רחב (16:9)":   "16:9",
-    "לאורך (9:16)": "9:16",
-    "2:3 לאורך":    "2:3",
-    "3:2 לרוחב":    "3:2",
+    "מרובע (1:1)":              "1:1",
+    "רחב (16:9)":               "16:9",
+    "לאורך (9:16)":             "9:16",
+    "4:5 לאורך (Portrait)":     "4:5",
+    "4:5 לרוחב (Landscape)":    "4:5",
 }
 
 STYLE_WRAPPER = (
@@ -183,7 +183,8 @@ def generate_post(style_guide: str, category: str, idea: str,
                   word_count: int | None = None,
                   preset_style_instruction: str = "",
                   marketing_framework: str = "",
-                  post_notes: str = "") -> str:
+                  post_notes: str = "",
+                  retry_feedback: str = "") -> str:
     """מייצר פוסט בשפה ובסגנון הנבחרים."""
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
@@ -193,6 +194,7 @@ def generate_post(style_guide: str, category: str, idea: str,
 
     style_block = f"\nAdditional Style Layer:\n{preset_style_instruction}" if preset_style_instruction else ""
     notes_block = f"\nSpecial Notes for This Post:\n{post_notes}" if post_notes else ""
+    feedback_block = f"\nUser Feedback / Improvement Request (apply to this version):\n{retry_feedback}" if retry_feedback else ""
 
     if marketing_framework:
         structure_block = f"""
@@ -229,7 +231,7 @@ Rules:
 - Rhetorical questions where natural
 - Don't preach — let the insight emerge from the story
 - Rich but not formal language
-{style_block}{notes_block}
+{style_block}{notes_block}{feedback_block}
 - Return only the post text, no titles, labels, or explanations"""
 
     message = client.messages.create(
@@ -290,11 +292,35 @@ Post:
     return message.content[0].text.strip()
 
 
+def improve_style_guide(raw_guide: str) -> str:
+    """מקבל מדריך סגנון ומחזיר גרסה משופרת — ברורה, ממוקדת, וניתנת לפעולה יותר."""
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+    prompt = f"""You received a writing style guide created by analyzing someone's writing samples.
+Your task: rewrite it to be clearer, more actionable, and better structured.
+
+Rules:
+- Keep the same 5-category structure (תחביר, אוצר מילים, טון, דימויים, קצב)
+- Make each guideline concrete and actionable (e.g. "use short sentences of 10-15 words" not "writes briefly")
+- Remove redundancy and vague language
+- Preserve the person's unique voice characteristics
+- Output ONLY the improved guide, no explanations
+
+Guide to improve:
+{raw_guide}"""
+    response = client.messages.create(
+        model=ANTHROPIC_MODEL,
+        max_tokens=3000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.content[0].text.strip()
+
+
 def generate_image(face_image, scene_description: str,
                    aspect_ratio: str = "1:1",
                    style_description: str = "",
                    add_text: bool = False,
-                   text_content: str = "") -> bytes:
+                   text_content: str = "",
+                   extra_reference_images: list | None = None) -> bytes:
     """
     מייצר תמונה עם שמירת זהות דרך Google Gemini.
     face_image: Path | str | bytes
@@ -322,9 +348,19 @@ def generate_image(face_image, scene_description: str,
     else:
         face_img = Image.open(face_image)
 
+    contents = [image_prompt, face_img]
+    if extra_reference_images:
+        for img_bytes in extra_reference_images[:2]:
+            if img_bytes:
+                try:
+                    extra_img = Image.open(io.BytesIO(img_bytes))
+                    contents.append(extra_img)
+                except Exception:
+                    pass
+
     response = client.models.generate_content(
         model=IMAGEN_MODEL,
-        contents=[image_prompt, face_img],
+        contents=contents,
         config=types.GenerateContentConfig(
             response_modalities=["TEXT", "IMAGE"],
         ),

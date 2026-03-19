@@ -4,6 +4,7 @@ app.py — AI Content Studio | 4 Tabs
 """
 import base64 as _b64
 import io
+import json
 import os
 import re
 import time
@@ -18,6 +19,35 @@ import generator
 from generator import ASPECT_RATIOS, CONTENT_TYPES, LANGUAGES, PRESET_STYLES, MARKETING_FRAMEWORKS
 
 load_dotenv()
+
+
+# ── State persistence ─────────────────────────────────────────────────────────
+SETTINGS_FILE = Path(__file__).parent / "user_settings.json"
+SETTINGS_KEYS = [
+    "brand_name", "domain", "profession", "target_audience_custom",
+    "style_description", "char_description", "writing_style_mode",
+    "writing_style_selected", "image_style_mode", "marketing_framework",
+    "language", "content_type", "word_count", "preset_style",
+]
+
+
+def load_user_settings():
+    if SETTINGS_FILE.exists():
+        try:
+            data = json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+            for k, v in data.items():
+                if k not in st.session_state:
+                    st.session_state[k] = v
+        except Exception:
+            pass
+
+
+def save_user_settings():
+    data = {k: st.session_state.get(k, "") for k in SETTINGS_KEYS}
+    try:
+        SETTINGS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
 
 
 @st.cache_data
@@ -46,6 +76,7 @@ _font_face = f"""@font-face {{
 }}""" if _font_b64 else "@import url('https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;500;600;700&display=swap');"
 
 st.markdown("<style>" + _font_face + """
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap');
 
 *:not([data-testid="collapsedControl"]):not(.material-symbols-rounded):not(.material-symbols-outlined):not([class*="material"]) {
     font-family: 'Assistant', sans-serif !important;
@@ -60,7 +91,23 @@ st.markdown("<style>" + _font_face + """
     backdrop-filter: blur(20px);
     border-right: 1px solid rgba(255,255,255,0.06);
 }
-[data-testid="stSidebar"] > div:first-child { padding-top: 2rem; }
+[data-testid="stSidebar"] > div:first-child { padding-top: 0.5rem; }
+/* Remove Streamlit default top padding so hero image reaches page top */
+.block-container { padding-top: 0 !important; }
+section[data-testid="stAppViewContainer"] > div:first-child { padding-top: 0 !important; }
+/* Hide all sidebar collapse/expand controls and their icon labels */
+[data-testid="collapsedControl"],
+[data-testid="stSidebarCollapseButton"],
+button[kind="header"],
+[data-testid="stSidebarCollapseButton"] button {
+    display: none !important;
+}
+/* Suppress icon-name text only inside the sidebar collapse/header control, not regular buttons */
+[data-testid="stSidebar"] header span,
+[data-testid="stSidebarCollapseButton"] span {
+    font-size: 0 !important;
+    visibility: hidden !important;
+}
 
 .main-title {
     font-size: 2.8rem; font-weight: 700;
@@ -72,13 +119,13 @@ st.markdown("<style>" + _font_face + """
 .sub-title {
     text-align: center; color: rgba(255,255,255,0.4);
     font-size: 0.95rem; font-weight: 300;
-    margin-bottom: 2.5rem; letter-spacing: 0.05em;
+    margin-bottom: 1.5rem; letter-spacing: 0.05em;
 }
 .glass-card {
     background: rgba(255,255,255,0.04);
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 20px; padding: 1.8rem;
-    backdrop-filter: blur(10px); margin-bottom: 1.2rem;
+    border-radius: 20px; padding: 1.4rem;
+    backdrop-filter: blur(10px); margin-bottom: 0.8rem;
     transition: border-color 0.3s ease;
 }
 .glass-card:hover { border-color: rgba(167,139,250,0.3); }
@@ -91,8 +138,8 @@ st.markdown("<style>" + _font_face + """
     background: rgba(255,255,255,0.02);
     border: 1px solid rgba(255,255,255,0.06);
     border-radius: 16px; padding: 1.6rem 2rem;
-    color: rgba(255,255,255,0.88); font-size: 0.95rem;
-    line-height: 1.9; direction: rtl; text-align: right;
+    color: rgba(255,255,255,0.88); font-size: 1.05rem;
+    line-height: 1.6; direction: rtl; text-align: right;
     min-height: 300px; white-space: pre-wrap;
     font-family: 'Assistant', sans-serif;
 }
@@ -109,16 +156,17 @@ st.markdown("<style>" + _font_face + """
     box-shadow: 0 8px 30px rgba(124,58,237,0.5) !important;
 }
 .stDownloadButton > button {
-    background: rgba(255,255,255,0.06) !important;
-    color: rgba(255,255,255,0.8) !important;
-    border: 1px solid rgba(255,255,255,0.12) !important;
-    border-radius: 12px !important; font-weight: 500 !important;
-    transition: all 0.2s ease !important; box-shadow: none !important;
+    background: linear-gradient(135deg, rgba(124,58,237,0.7), rgba(59,130,246,0.7)) !important;
+    color: white !important;
+    border: 1px solid rgba(124,58,237,0.4) !important;
+    border-radius: 14px !important; font-weight: 600 !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 2px 12px rgba(124,58,237,0.2) !important;
 }
 .stDownloadButton > button:hover {
-    background: rgba(255,255,255,0.1) !important;
-    border-color: rgba(255,255,255,0.25) !important;
+    background: linear-gradient(135deg, #7c3aed, #3b82f6) !important;
     transform: translateY(-1px) !important;
+    box-shadow: 0 4px 20px rgba(124,58,237,0.4) !important;
 }
 /* ── כל הטקסטים לבנים ── */
 *, p, span, div, label, li {
@@ -171,19 +219,29 @@ li[role="option"]:hover {
 
 /* textarea */
 .stTextArea > div > div > textarea,
+.stTextArea textarea,
 textarea,
 [data-baseweb="textarea"] textarea,
+[data-baseweb="textarea"] [data-baseweb="base-input"] textarea,
 [data-baseweb="base-input"] textarea {
     background: #12122a !important;
     border: 1px solid rgba(255,255,255,0.12) !important;
     border-radius: 12px !important;
-    color: rgba(255,255,255,0.88) !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
     direction: rtl;
     font-size: 0.93rem !important;
     line-height: 1.8 !important;
     padding: 1rem !important;
 }
-textarea::placeholder { color: rgba(255,255,255,0.3) !important; }
+textarea::placeholder,
+.stTextArea textarea::placeholder,
+[data-baseweb="textarea"] textarea::placeholder,
+[data-baseweb="base-input"] textarea::placeholder {
+    color: rgba(255,255,255,0.38) !important;
+    -webkit-text-fill-color: rgba(255,255,255,0.38) !important;
+    opacity: 1 !important;
+}
 
 /* text input + number input — כהה עם טקסט לבן */
 .stTextInput > div > div > input,
@@ -196,11 +254,18 @@ input[type="search"],
     background: #12122a !important;
     border: 1px solid rgba(255,255,255,0.12) !important;
     border-radius: 12px !important;
-    color: rgba(255,255,255,0.88) !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
     direction: rtl;
 }
 input::placeholder,
-.stTextInput input::placeholder { color: rgba(255,255,255,0.3) !important; }
+.stTextInput input::placeholder,
+[data-baseweb="input"] input::placeholder,
+[data-baseweb="base-input"] input::placeholder {
+    color: rgba(255,255,255,0.38) !important;
+    -webkit-text-fill-color: rgba(255,255,255,0.38) !important;
+    opacity: 1 !important;
+}
 
 /* radio */
 .stRadio label, .stRadio span, .stRadio div {
@@ -266,28 +331,50 @@ label, .stSelectbox label, .stTextArea label, .stFileUploader label,
 .stTabs [data-baseweb="tab-list"] {
     background: transparent !important;
     border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+    gap: 0.25rem !important;
 }
 /* tabs — individual tab */
 .stTabs [data-baseweb="tab"] {
     background: transparent !important;
     color: rgba(255,255,255,0.55) !important;
+    font-size: 1rem !important;
+    font-weight: 500 !important;
+    padding: 0.65rem 1.1rem !important;
+    border-radius: 10px 10px 0 0 !important;
+    transition: color 0.18s ease, background 0.18s ease !important;
 }
 .stTabs [data-baseweb="tab"] span,
 .stTabs [data-baseweb="tab"] div,
 .stTabs [data-baseweb="tab"] p {
     color: rgba(255,255,255,0.55) !important;
+    font-size: 1rem !important;
+    transition: color 0.18s ease !important;
 }
+/* hover state */
+.stTabs [data-baseweb="tab"]:hover {
+    background: rgba(124,58,237,0.12) !important;
+    color: rgba(255,255,255,0.9) !important;
+}
+.stTabs [data-baseweb="tab"]:hover span,
+.stTabs [data-baseweb="tab"]:hover div,
+.stTabs [data-baseweb="tab"]:hover p {
+    color: rgba(255,255,255,0.9) !important;
+}
+/* active tab */
 .stTabs [data-baseweb="tab"][aria-selected="true"] {
     color: white !important;
+    background: rgba(124,58,237,0.08) !important;
 }
 .stTabs [data-baseweb="tab"][aria-selected="true"] span,
 .stTabs [data-baseweb="tab"][aria-selected="true"] div,
 .stTabs [data-baseweb="tab"][aria-selected="true"] p {
     color: white !important;
+    font-weight: 600 !important;
 }
 /* tab highlight bar */
 .stTabs [data-baseweb="tab-highlight"] {
     background: linear-gradient(90deg, #7c3aed, #3b82f6) !important;
+    height: 3px !important;
 }
 /* tab border */
 .stTabs [data-baseweb="tab-border"] {
@@ -372,9 +459,25 @@ label, .stSelectbox label, .stTextArea label, .stFileUploader label,
 /* hide "Press Enter to apply" hint on all text inputs */
 [data-testid="InputInstructions"] { display: none !important; }
 
-/* compact confirm button — same height as text input (~38px) */
-div[data-testid="stButton"]:has(button[kind="secondary"]#apply_domain_btn) > button,
-button[key="apply_domain_btn"],
+/* Domain row: align confirm button to bottom of its column so it sits flush with the input */
+div[data-testid="stHorizontalBlock"]:has(#ideas_domain_input) div[data-testid="column"] {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-end !important;
+}
+div[data-testid="stHorizontalBlock"]:has(#ideas_domain_input) div[data-testid="column"] > div {
+    width: 100% !important;
+}
+/* Make the domain input field taller to match the button height */
+div[data-testid="stHorizontalBlock"]:has(#ideas_domain_input) input#ideas_domain_input,
+div[data-testid="stHorizontalBlock"]:has(#ideas_domain_input) [data-baseweb="input"] input,
+div[data-testid="stHorizontalBlock"]:has(#ideas_domain_input) [data-baseweb="base-input"] input {
+    padding-top: 0.65rem !important;
+    padding-bottom: 0.75rem !important;
+    min-height: 46px !important;
+}
+
+/* compact secondary buttons in columns */
 div[data-testid="column"] button[data-testid="baseButton-secondary"] {
     padding: 0.3rem 0.8rem !important;
     font-size: 0.85rem !important;
@@ -383,22 +486,305 @@ div[data-testid="column"] button[data-testid="baseButton-secondary"] {
     border-radius: 10px !important;
 }
 
+/* Expander — clean RTL separation, no overlap */
+[data-testid="stExpander"] {
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    border-radius: 14px !important;
+    margin-bottom: 0.5rem !important;
+    overflow: hidden !important;
+    background: rgba(255,255,255,0.01) !important;
+}
+[data-testid="stExpander"] summary {
+    direction: rtl !important;
+    padding: 0.65rem 2.2rem 0.65rem 1rem !important;
+    background: rgba(255,255,255,0.02) !important;
+    font-weight: 600 !important;
+    font-size: 0.88rem !important;
+    color: rgba(255,255,255,0.85) !important;
+    list-style: none !important;
+    cursor: pointer !important;
+    position: relative !important;
+}
+[data-testid="stExpander"] summary::before {
+    content: '▼' !important;
+    position: absolute !important;
+    left: 0.9rem !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    font-size: 0.55rem !important;
+    color: rgba(255,255,255,0.45) !important;
+    transition: transform 0.2s ease !important;
+    font-family: sans-serif !important;
+}
+[data-testid="stExpander"] details[open] > summary::before {
+    content: '▲' !important;
+    color: rgba(167,139,250,0.7) !important;
+}
+[data-testid="stExpander"] details[open] summary {
+    border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+}
+[data-testid="stExpander"] details > div {
+    padding: 0.8rem 0.6rem !important;
+}
+
+/* ── Selectbox dropdown popup — contrast fix (best-effort; JS injection is authoritative) ── */
+[data-baseweb="popover"],
+[data-baseweb="popover"] > div,
+[data-baseweb="popover"] [data-baseweb="menu"],
+ul[data-baseweb="menu"],
+[role="listbox"] {
+    background: #0e0e22 !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
+    border-radius: 12px !important;
+}
+[data-baseweb="menu"] [role="option"],
+[data-baseweb="menu"] li,
+ul[data-baseweb="menu"] li,
+[role="listbox"] [role="option"] {
+    background: #0e0e22 !important;
+    color: rgba(255,255,255,0.88) !important;
+    -webkit-text-fill-color: rgba(255,255,255,0.88) !important;
+    font-size: 0.92rem !important;
+    direction: rtl !important;
+    text-align: right !important;
+}
+[data-baseweb="menu"] [role="option"]:hover,
+[data-baseweb="menu"] li:hover,
+ul[data-baseweb="menu"] li:hover,
+[role="listbox"] [role="option"]:hover {
+    background: #2d1f5e !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
+[data-baseweb="menu"] [aria-selected="true"],
+[data-baseweb="menu"] li[aria-selected="true"],
+[data-baseweb="menu"] [data-highlighted],
+[data-baseweb="menu"] li[data-highlighted],
+[role="listbox"] [aria-selected="true"],
+[role="option"][aria-selected="true"],
+[data-baseweb="menu"] li:focus,
+[data-baseweb="menu"] [role="option"]:focus {
+    background: #3b2070 !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
+
+/* ── Tooltip (full-text hover popup on truncated selectbox items) ── */
+[data-baseweb="tooltip"],
+[role="tooltip"],
+[data-baseweb="tooltip"] > div,
+[data-baseweb="tooltip"] [data-baseweb="block"] {
+    background: #1a1040 !important;
+    background-color: #1a1040 !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    border: 1px solid rgba(167,139,250,0.4) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.6) !important;
+}
+[data-baseweb="tooltip"] *,
+[role="tooltip"] * {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    background: transparent !important;
+    background-color: transparent !important;
+}
+
+
+/* Uniform button/download-button height in columns (archive cards etc.) */
+div[data-testid="column"] .stButton > button,
+div[data-testid="column"] .stDownloadButton > button {
+    min-height: 40px !important;
+}
+
+/* Hide broken Material Icons SVG fallback */
+[data-testid="stExpander"] summary svg {
+    display: none !important;
+}
+
+/* Audience checkboxes — larger, RTL-aligned (checkbox on right = reading start) */
+[data-testid="stCheckbox"] {
+    padding: 0.3rem 0 !important;
+}
+[data-testid="stCheckbox"] label {
+    display: flex !important;
+    flex-direction: row !important;
+    direction: rtl !important;
+    align-items: center !important;
+    gap: 0.6rem !important;
+    cursor: pointer !important;
+    line-height: 1.4 !important;
+    font-size: 0.88rem !important;
+    color: rgba(255,255,255,0.85) !important;
+    width: 100% !important;
+}
+[data-testid="stCheckbox"] input[type="checkbox"] {
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px !important;
+    cursor: pointer !important;
+    accent-color: #7c3aed !important;
+    flex-shrink: 0 !important;
+}
+
 #MainMenu, footer, header { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
+# ── JS: (1) force dropdown contrast via inline styles  (2) hide expander icon text ──
+import streamlit.components.v1 as _stc
+_stc.html("""
+<script>
+(function() {
+    var pdoc = window.parent.document;
+
+    /* ── 1. Force dropdown/listbox contrast by directly setting inline styles ──
+       BaseWeb (Styletron) injects CSS-in-JS !important rules after any <style> tag,
+       so CSS-only fixes lose the specificity war. The only reliable override is
+       element.style.setProperty(..., 'important') which always wins. */
+
+    var BG_DEFAULT  = '#0e0e22';
+    var BG_HOVER    = '#2d1f5e';
+    var BG_SELECTED = '#3b2070';
+    var TEXT_DEFAULT = 'rgba(255,255,255,0.9)';
+    var TEXT_WHITE   = '#ffffff';
+
+    function styleOption(el, bg, text) {
+        el.style.setProperty('background',       bg,   'important');
+        el.style.setProperty('background-color', bg,   'important');
+        el.style.setProperty('color',            text, 'important');
+        el.style.setProperty('-webkit-text-fill-color', text, 'important');
+    }
+
+    function applyDropdownStyles(root) {
+        /* Container backgrounds */
+        root.querySelectorAll(
+            '[data-baseweb="popover"],[data-baseweb="menu"],[role="listbox"]'
+        ).forEach(function(el) {
+            el.style.setProperty('background',       BG_DEFAULT, 'important');
+            el.style.setProperty('background-color', BG_DEFAULT, 'important');
+        });
+
+        /* Option rows */
+        root.querySelectorAll(
+            '[role="option"],[data-baseweb="menu"] li'
+        ).forEach(function(opt) {
+            /* determine initial state */
+            var isSelected = opt.getAttribute('aria-selected') === 'true';
+            styleOption(opt, isSelected ? BG_SELECTED : BG_DEFAULT, isSelected ? TEXT_WHITE : TEXT_DEFAULT);
+
+            /* fix children — BaseWeb puts a <div> inside each li with its own bg */
+            opt.querySelectorAll('*').forEach(function(child) {
+                child.style.setProperty('background',       'transparent', 'important');
+                child.style.setProperty('background-color', 'transparent', 'important');
+                child.style.setProperty('color',            'inherit',     'important');
+                child.style.setProperty('-webkit-text-fill-color', 'inherit', 'important');
+            });
+
+            if (opt._lirazBound) return;
+            opt._lirazBound = true;
+
+            opt.addEventListener('mouseenter', function() {
+                styleOption(this, BG_HOVER, TEXT_WHITE);
+            });
+            opt.addEventListener('mouseleave', function() {
+                var sel = this.getAttribute('aria-selected') === 'true';
+                styleOption(this, sel ? BG_SELECTED : BG_DEFAULT, sel ? TEXT_WHITE : TEXT_DEFAULT);
+            });
+        });
+    }
+
+    /* ── Force white text on all inputs and textareas ── */
+    function applyInputStyles(root) {
+        root.querySelectorAll(
+            'input[type="text"],input[type="number"],input[type="search"],textarea'
+        ).forEach(function(el) {
+            el.style.setProperty('color',                   '#ffffff', 'important');
+            el.style.setProperty('-webkit-text-fill-color', '#ffffff', 'important');
+        });
+    }
+    applyInputStyles(pdoc);
+
+    /* ── Also force-style tooltip popups (full-text hover on truncated items) ── */
+    function applyTooltipStyles(root) {
+        root.querySelectorAll('[data-baseweb="tooltip"],[role="tooltip"]').forEach(function(tip) {
+            tip.style.setProperty('background',       '#1a1040', 'important');
+            tip.style.setProperty('background-color', '#1a1040', 'important');
+            tip.style.setProperty('color',            '#ffffff', 'important');
+            tip.style.setProperty('-webkit-text-fill-color', '#ffffff', 'important');
+            tip.style.setProperty('border', '1px solid rgba(167,139,250,0.4)', 'important');
+            tip.style.setProperty('border-radius', '8px', 'important');
+            tip.querySelectorAll('*').forEach(function(child) {
+                child.style.setProperty('background',       'transparent', 'important');
+                child.style.setProperty('background-color', 'transparent', 'important');
+                child.style.setProperty('color',            '#ffffff',     'important');
+                child.style.setProperty('-webkit-text-fill-color', '#ffffff', 'important');
+            });
+        });
+    }
+
+    /* Run on every DOM mutation so we catch dynamically rendered portals */
+    var dropdownObs = new MutationObserver(function(mutations) {
+        mutations.forEach(function(m) {
+            m.addedNodes.forEach(function(node) {
+                if (node.nodeType !== 1) return;
+                applyDropdownStyles(node);
+                applyTooltipStyles(node);
+                applyInputStyles(node);
+            });
+        });
+        /* Also re-apply to whole doc in case aria-selected changed */
+        applyDropdownStyles(pdoc);
+        applyTooltipStyles(pdoc);
+        checkNavTrigger();
+    });
+    dropdownObs.observe(pdoc.body, { childList: true, subtree: true });
+    applyDropdownStyles(pdoc);
+    applyTooltipStyles(pdoc);
+
+    /* ── 2. Tab navigation trigger — click Ideas tab when hidden div appears ── */
+    function checkNavTrigger() {
+        if (pdoc.getElementById('liraz-nav-to-ideas')) {
+            var tabs = pdoc.querySelectorAll('button[role="tab"]');
+            for (var i = 0; i < tabs.length; i++) {
+                if (tabs[i].innerText.includes('מחולל רעיונות')) {
+                    /* Only click if not already the active tab — prevents flicker */
+                    if (tabs[i].getAttribute('aria-selected') !== 'true') {
+                        tabs[i].click();
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    /* ── 3. Hide Material Icon spans in expander summaries ── */
+    function hideIconSpans() {
+        pdoc.querySelectorAll('[data-testid="stExpander"] summary').forEach(function(summary) {
+            summary.querySelectorAll('span').forEach(function(span) {
+                var text = span.textContent.trim();
+                if (text.length > 0 && /^[a-z][a-z_]*$/.test(text)) {
+                    span.style.cssText = 'display:none!important;';
+                }
+            });
+        });
+    }
+    hideIconSpans();
+    var iconObs = new MutationObserver(hideIconSpans);
+    iconObs.observe(pdoc.body, { childList: true, subtree: true });
+})();
+</script>
+""", height=0, scrolling=False)
 
 # ── Session state ─────────────────────────────────────────────────────────────
 def init_state():
     defaults = {
-        # existing
         "post_text": "",
         "image_bytes": None,
         "style_guide": None,
         "post_ideas": None,
         "style_bytes": None,
         "ideas_bytes": None,
-        # new
         "character_image_bytes": None,
         "style_description": "",
         "style_image_list": [],
@@ -418,112 +804,35 @@ def init_state():
         "post_notes": "",
         "image_notes": "",
         "archive": [],
+        "archive_view_idx": None,
         "custom_content": "",
         "_jump_to_ideas": False,
+        "_last_ideas_domain": "",
+        "_pending_audience_gen": "",
+        "_pending_table_gen": {},
+        "_ideas_rerun_trigger": False,
         "free_style_text": "",
         "show_fw_guide": False,
-        "show_welcome_modal": True,
+        "generating": False,
+        "settings_loaded": False,
+        "reference_images": [None, None, None],
+        "style_text_buffer": [],
+        "pasted_sample_key": 0,
+        "retry_feedback": "",
+        "style_usage_instructions": "",
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
+    if not st.session_state.settings_loaded:
+        load_user_settings()
+        st.session_state.settings_loaded = True
 
 init_state()
 
-# ── Welcome Modal ─────────────────────────────────────────────────────────────
-@st.dialog(" ", width="large")
-def _show_welcome_dialog():
-    st.markdown("""
-<style>
-[data-testid="stDialog"] > div > div {
-    background: linear-gradient(145deg, #0f0f24 0%, #0d1628 100%) !important;
-    border: 1px solid rgba(167,139,250,0.3) !important;
-    border-radius: 28px !important;
-    max-width: 900px !important;
-    width: 90vw !important;
-}
-/* Hide the native header area entirely — we render our own title */
-[data-testid="stDialogHeader"] {
-    display: none !important;
-}
-/* Body direction */
-[data-testid="stDialogBody"] { direction: rtl; text-align: right; }
-/* "בואו נתחיל" button */
-[data-testid="stDialog"] .stButton > button {
-    font-size: 1.35rem !important;
-    font-weight: 800 !important;
-    letter-spacing: 0.03em !important;
-}
-/* Blur entire background behind modal */
-[data-testid="stMain"],
-[data-testid="stSidebar"],
-header[data-testid="stHeader"] {
-    filter: blur(6px) brightness(0.55) !important;
-    pointer-events: none !important;
-    transition: filter 0.3s ease !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
-    # Custom title — full control over alignment and styling
-    st.markdown("""
-<div style="
-    direction: rtl;
-    text-align: right;
-    background: linear-gradient(135deg, #a78bfa, #60a5fa, #34d399);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    font-size: 2rem;
-    font-weight: 700;
-    margin-bottom: 1.2rem;
-    line-height: 1.3;
-">✦ ברוך הבא!</div>
-""", unsafe_allow_html=True)
-
-    st.markdown("""
-<div style="direction:rtl;text-align:right;color:rgba(255,255,255,0.88);font-size:1.15rem;line-height:2.1;">
-כאן תוכל לייצר תוכן לכל פלטפורמה – פוסטים, מאמרים ובלוגים – בצורה פשוטה ומהירה.
-</div>
-""", unsafe_allow_html=True)
-
-    st.markdown("""
-<div style="direction:rtl;text-align:right;color:rgba(255,255,255,0.75);font-size:1.08rem;line-height:2.1;margin-top:0.8rem;">
-אם אין לך רעיונות, לא בטוח איך לכתוב, או שאין לך תמונות מתאימות – המערכת הזו בדיוק בשבילך.<br>
-היא מציעה לך רעיונות לתוכן לפי סוג העסק שלך וקהל היעד שלך, כך שהתוכן תמיד יהיה רלוונטי ומעניין.
-</div>
-""", unsafe_allow_html=True)
-
-    st.markdown('<hr style="border:none;border-top:1px solid rgba(167,139,250,0.25);margin:1.2rem 0;">', unsafe_allow_html=True)
-
-    st.markdown("""
-<div style="direction:rtl;text-align:right;color:rgba(255,255,255,0.75);font-size:1.08rem;line-height:2.1;">
-בנוסף, תוכל ליצור לעצמך <strong style="color:rgba(167,139,250,0.95);">סגנון כתיבה ייחודי</strong>:<br>
-לאמן את המערכת על סגנון קיים, לבחור סגנון מתוך אפשרויות קיימות, או לבנות סגנון משלך מאפס.<br><br>
-אפשר גם להעלות תמונות שלך או של המוצרים שלך, ולהתאים אותן לתוכן בצורה חכמה, כך שהמסר שלך יהיה אחיד וברור.
-</div>
-""", unsafe_allow_html=True)
-
-    st.markdown('<hr style="border:none;border-top:1px solid rgba(96,165,250,0.2);margin:1.2rem 0;">', unsafe_allow_html=True)
-
-    st.markdown("""
-<div style="direction:rtl;text-align:right;color:rgba(255,255,255,0.92);font-size:1.15rem;line-height:2.1;font-weight:600;">
-מה שהופך עסק למותג הוא עקביות –<br>
-<span style="color:rgba(255,255,255,0.6);font-weight:400;">בסגנון הכתיבה, בנראות ובמסרים.</span>
-</div>
-<div style="direction:rtl;text-align:right;color:rgba(255,255,255,0.75);font-size:1.08rem;line-height:2.1;margin-top:0.6rem;margin-bottom:1.4rem;">
-וזה בדיוק מה שהמערכת הזו באה לפתור:<br>
-לעזור לך לייצר תוכן אחיד, מדויק ומעניין – שמדבר לקהל שלך ומחזק את המותג שלך.
-</div>
-""", unsafe_allow_html=True)
-
-    if st.button("✦ **בואו נתחיל**", use_container_width=True, key="welcome_start_btn"):
-        st.rerun()
-
-
-if st.session_state.show_welcome_modal:
-    st.session_state.show_welcome_modal = False
-    _show_welcome_dialog()
+# Callback used by Ideas-tab widgets (checkboxes, etc.) to signal "stay on Ideas tab"
+def _ideas_tab_action():
+    st.session_state["_ideas_rerun_trigger"] = True
 
 
 def _safe_filename(s: str) -> str:
@@ -558,6 +867,11 @@ def _get_header_image_b64() -> str:
         return ""
 
 
+# ── Fallback variable defaults (used in tabs regardless of sidebar expander state) ──
+category = None
+idea = None
+face_source = st.session_state.character_image_bytes
+
 # ── SIDEBAR ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     if not check_api_keys():
@@ -565,243 +879,228 @@ with st.sidebar:
 
     default_style, default_ideas = load_default_data()
     style_guide = st.session_state.style_guide or default_style
-    post_ideas = st.session_state.post_ideas
 
-    # ── בחירת רעיון (MOVED TO TOP) ──
-    st.markdown('<div class="sidebar-section">💡 בחירת רעיון ממחולל הרעיונות</div>', unsafe_allow_html=True)
-    if post_ideas:
-        category = st.selectbox(
-            "קטגוריה", options=list(post_ideas.keys()), label_visibility="collapsed"
+    # ── 1. Ideas expander (expanded — visible by default) ──
+    with st.expander("💡 רעיונות ובחירת תוכן", expanded=True):
+        custom_content = st.text_input(
+            "✏️ רעיון לפוסט",
+            value=st.session_state.get("custom_content", ""),
+            placeholder="כתוב בקצרה...",
+            key="sb_custom_content",
         )
-        ideas_list = post_ideas.get(category, [])
-        idea = st.selectbox("רעיון", options=ideas_list, label_visibility="collapsed")
-        selected_idea_source = "dropdown"
-        if st.button("🗑 איפוס רעיונות", use_container_width=True, key="reset_ideas_btn"):
-            st.session_state.post_ideas = None
-            st.session_state.ideas_bytes = None
-            st.session_state.ideas_table = {}
-            st.session_state.ideas_tables_history = []
-            st.session_state.ideas_table_idx = 0
-            st.rerun()
-    else:
-        st.caption("טען רעיונות ממחולל הרעיונות או מקובץ DOCX")
-        category = None
-        idea = None
-        selected_idea_source = "none"
+        st.session_state.custom_content = custom_content
 
-    if st.button("💡 מחולל הרעיונות", use_container_width=True, key="goto_ideas_btn"):
-        st.session_state["_jump_to_ideas"] = True
-
-    uploaded_ideas = st.file_uploader("טען רעיונות (DOCX / XLSX / PDF)", type=["docx", "xlsx", "pdf"], key="ideas_upload")
-    if uploaded_ideas:
-        new_bytes = uploaded_ideas.read()
-        if new_bytes != st.session_state.ideas_bytes:
-            st.session_state.ideas_bytes = new_bytes
-            _suffix = uploaded_ideas.name.rsplit(".", 1)[-1].lower()
-            st.session_state.post_ideas = data_loader.load_post_ideas(new_bytes, suffix=_suffix)
-            st.rerun()
-
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
-
-    # ── רעיון חופשי ──
-    st.markdown('<div class="sidebar-section">✏️ רעיון חופשי</div>', unsafe_allow_html=True)
-    custom_content = st.text_input(
-        "מה הרעיון שלך לתוכן?",
-        value=st.session_state.get("custom_content", ""),
-        placeholder="כתוב בקצרה",
-        label_visibility="visible",
-        key="sb_custom_content",
-    )
-    st.session_state.custom_content = custom_content
-
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
-
-    # ── שפה ──
-    st.markdown('<div class="sidebar-section">🌐 שפה</div>', unsafe_allow_html=True)
-    selected_language = st.selectbox(
-        "שפת פלט", options=LANGUAGES,
-        index=LANGUAGES.index(st.session_state.language),
-        label_visibility="collapsed", key="sb_language",
-    )
-    st.session_state.language = selected_language
-
-    # ── סוג תוכן ──
-    st.markdown('<div class="sidebar-section">📋 סוג תוכן</div>', unsafe_allow_html=True)
-    ct_keys = list(CONTENT_TYPES.keys())
-    selected_ct = st.selectbox(
-        "סוג תוכן", options=ct_keys,
-        index=ct_keys.index(st.session_state.content_type),
-        label_visibility="collapsed", key="sb_content_type",
-    )
-    st.session_state.content_type = selected_ct
-    st.caption(f"מומלץ: {CONTENT_TYPES[selected_ct]['words']} מילים")
-    word_count_val = st.number_input(
-        "כמות מילים מותאמת (0 = ברירת מחדל)",
-        min_value=0, max_value=3000, value=st.session_state.word_count,
-        step=50, key="sb_word_count",
-    )
-    st.session_state.word_count = word_count_val
-
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
-
-    # ── סגנון כתיבה (NEW) ──
-    st.markdown('<div class="sidebar-section">✍️ סגנון כתיבה</div>', unsafe_allow_html=True)
-    style_options = ["none"] + list(PRESET_STYLES.keys())
-    _none_label = "סגנון מותאם (DOCX)" if st.session_state.style_bytes else "ללא (מהמחולל)"
-    style_display = [_none_label] + [PRESET_STYLES[k]["hebrew_name"] for k in PRESET_STYLES]
-    cur_style_idx = style_options.index(st.session_state.preset_style) if st.session_state.preset_style in style_options else 0
-    selected_style_idx = st.selectbox(
-        "סגנון כתיבה",
-        options=range(len(style_options)),
-        format_func=lambda i: style_display[i],
-        index=cur_style_idx,
-        label_visibility="collapsed",
-    )
-    st.session_state.preset_style = style_options[selected_style_idx]
-    if st.session_state.preset_style != "none":
-        st.caption(PRESET_STYLES[st.session_state.preset_style]["description"])
-
-    uploaded_style = st.file_uploader("העלה סגנון כתיבה (DOCX / PDF)", type=["docx", "pdf"], key=f"style_upload_{st.session_state.style_upload_key}")
-    if uploaded_style:
-        new_bytes = uploaded_style.read()
-        if new_bytes != st.session_state.style_bytes:
-            st.session_state.style_bytes = new_bytes
-            _style_suffix = uploaded_style.name.rsplit(".", 1)[-1].lower()
-            st.session_state.style_guide = data_loader.load_style_guide(new_bytes, suffix=_style_suffix)
-            st.session_state.preset_style = "none"
-            st.rerun()
-
-    _style_active = (
-        st.session_state.preset_style != "none"
-        or st.session_state.style_bytes
-        or st.session_state.generated_style_guide
-    )
-    if _style_active:
-        if st.button("🗑 איפוס סגנון כתיבה", use_container_width=True, key="reset_style_sidebar"):
-            st.session_state.preset_style = "none"
-            st.session_state.style_bytes = None
-            st.session_state.style_guide = None
-            st.session_state.generated_style_guide = ""
-            st.session_state.style_upload_key += 1
-            st.rerun()
-
-    # ── מודל כתיבה שיווקית (NEW) ──
-    st.markdown('<div class="sidebar-section">📊 מודל כתיבה שיווקית</div>', unsafe_allow_html=True)
-    fw_keys = list(MARKETING_FRAMEWORKS.keys())
-    fw_display = [MARKETING_FRAMEWORKS[k]["name"] for k in fw_keys]
-    cur_fw_idx = fw_keys.index(st.session_state.marketing_framework) if st.session_state.marketing_framework in fw_keys else 0
-    selected_fw_idx = st.selectbox(
-        "מודל כתיבה שיווקית",
-        options=range(len(fw_keys)),
-        format_func=lambda i: fw_display[i],
-        index=cur_fw_idx,
-        label_visibility="collapsed",
-        key="sb_marketing_fw",
-    )
-    st.session_state.marketing_framework = fw_keys[selected_fw_idx]
-    if st.session_state.marketing_framework != "none":
-        st.caption(MARKETING_FRAMEWORKS[st.session_state.marketing_framework]["description"])
-
-    if st.button("📖 מה הם מודלי כתיבה שיווקית?", key="toggle_fw_guide_btn", use_container_width=True):
-        st.session_state.show_fw_guide = not st.session_state.show_fw_guide
-
-    if st.session_state.show_fw_guide:
-        try:
-            fw_guide_path = Path(__file__).parent / "frameworks" / "מודלי כתיבה שיווקית.txt"
-            fw_guide_text = fw_guide_path.read_text(encoding="utf-8")
-            lines_html = ""
-            for line in fw_guide_text.splitlines():
-                if line.startswith("## "):
-                    lines_html += f'<div style="font-size:0.88rem;font-weight:700;color:rgba(167,139,250,0.95);margin-top:1rem;margin-bottom:0.3rem;">{line[3:]}</div>'
-                elif line.startswith("### "):
-                    lines_html += f'<div style="font-size:0.8rem;font-weight:600;color:rgba(255,255,255,0.75);margin-top:0.6rem;">{line[4:]}</div>'
-                elif line.startswith("# "):
-                    lines_html += f'<div style="font-size:1rem;font-weight:700;color:white;margin-bottom:0.5rem;">{line[2:]}</div>'
-                elif line.startswith("---"):
-                    lines_html += '<hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:0.8rem 0;">'
-                elif line.startswith("- "):
-                    lines_html += f'<div style="font-size:0.8rem;color:rgba(255,255,255,0.65);padding:0.15rem 0 0.15rem 0.5rem;">• {line[2:]}</div>'
-                elif line.strip():
-                    lines_html += f'<div style="font-size:0.8rem;color:rgba(255,255,255,0.6);line-height:1.7;margin-top:0.2rem;">{line}</div>'
-            st.markdown(
-                f'<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);'
-                f'border-radius:14px;padding:1.2rem 1.4rem;margin-top:0.5rem;direction:rtl;text-align:right;">'
-                f'{lines_html}</div>',
-                unsafe_allow_html=True,
+        post_ideas = st.session_state.post_ideas
+        if post_ideas:
+            category = st.selectbox(
+                "קטגוריה", options=list(post_ideas.keys()), label_visibility="collapsed"
             )
-        except FileNotFoundError:
-            st.warning("קובץ המדריך לא נמצא")
+            ideas_list = post_ideas.get(category, [])
+            idea = st.selectbox("רעיון מהרשימה", options=ideas_list, label_visibility="collapsed")
+            if st.button("🗑 איפוס רעיונות", use_container_width=True, key="reset_ideas_btn"):
+                st.session_state.post_ideas = None
+                st.session_state.ideas_bytes = None
+                st.session_state.ideas_table = {}
+                st.session_state.ideas_tables_history = []
+                st.session_state.ideas_table_idx = 0
+                st.rerun()
+        else:
+            st.caption("טען רעיונות ממחולל הרעיונות או מקובץ")
 
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
+        if st.button("💡 מחולל הרעיונות", use_container_width=True, key="goto_ideas_btn"):
+            st.session_state["_jump_to_ideas"] = True
+            st.rerun()
 
-    # ── תמונת ייחוס (SIMPLIFIED — no my_images gallery) ──
-    st.markdown('<div class="sidebar-section">🖼 תמונת ייחוס</div>', unsafe_allow_html=True)
-    if st.session_state.character_image_bytes:
-        st.image(st.session_state.character_image_bytes, use_container_width=True)
-        st.caption("✓ תמונת ייחוס פעילה — עדכון בטאב הגדרות ויזואל")
-        face_source = st.session_state.character_image_bytes
-    else:
-        st.info("העלה תמונת ייחוס בטאב הגדרות ויזואל")
-        face_source = None
+        uploaded_ideas = st.file_uploader("טען רעיונות (DOCX / XLSX / PDF)", type=["docx", "xlsx", "pdf"], key="ideas_upload")
+        if uploaded_ideas:
+            new_bytes = uploaded_ideas.read()
+            if new_bytes != st.session_state.ideas_bytes:
+                st.session_state.ideas_bytes = new_bytes
+                _suffix = uploaded_ideas.name.rsplit(".", 1)[-1].lower()
+                st.session_state.post_ideas = data_loader.load_post_ideas(new_bytes, suffix=_suffix)
+                st.rerun()
 
-    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
-
-    # ── הערות מיוחדות (NEW) ──
-    st.markdown('<div class="sidebar-section">📝 הערות מיוחדות</div>', unsafe_allow_html=True)
+    # ── 2. Special Notes (always visible) ──
     post_notes_val = st.text_area(
-        "הערות לפוסט",
+        "📝 הערות מיוחדות לפוסט",
         value=st.session_state.post_notes,
-        height=80,
+        height=70,
         key="sb_post_notes",
-        placeholder="הוסף הנחיות ספציפיות לפוסט...",
+        placeholder="הנחיות ספציפיות, טון, אורך...",
     )
     st.session_state.post_notes = post_notes_val
 
     image_notes_val = st.text_area(
-        "הערות לתמונה",
+        "🖼 הערות לתמונה",
         value=st.session_state.image_notes,
-        height=80,
+        height=70,
         key="sb_image_notes",
-        placeholder="הוסף הנחיות ספציפיות לתמונה...",
+        placeholder="הנחיות ספציפיות לתמונה...",
     )
     st.session_state.image_notes = image_notes_val
 
+    # ── 3. Generate button ──
+    generate_btn = st.button(
+        "✦ צור פוסט + תמונה",
+        use_container_width=True,
+        disabled=st.session_state.get("generating", False),
+    )
+
     st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 
-    # ── כפתור יצירה ──
-    generate_btn = st.button("✦ צור פוסט + תמונה", use_container_width=True)
+    # ── 4. Reference image thumbnails ──
+    active_refs = [r for r in st.session_state.reference_images if r]
+    if active_refs:
+        face_source = active_refs[0]["bytes"]
+        thumb_cols = st.columns(len(active_refs))
+        for ci, ref in enumerate(active_refs):
+            with thumb_cols[ci]:
+                st.image(ref["bytes"], width=55)
+                st.caption(ref["label"][:5], unsafe_allow_html=False)
+    else:
+        st.info("העלה תמונת ייחוס בלשונית הגדרות תמונה")
 
     st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 
-    col_s1, col_s2 = st.columns(2)
-    with col_s1:
-        label = "סגנון מותאם" if st.session_state.style_bytes or st.session_state.generated_style_guide else "סגנון ברירת מחדל"
-        pill_cls = "status-pill-purple" if (st.session_state.style_bytes or st.session_state.generated_style_guide) else "status-pill"
-        st.markdown(f'<div class="{pill_cls}">{label}</div>', unsafe_allow_html=True)
-    with col_s2:
-        label2 = "רעיונות מותאמים" if st.session_state.ideas_bytes else "רעיונות ברירת מחדל"
-        pill_cls2 = "status-pill-purple" if st.session_state.ideas_bytes else "status-pill"
-        st.markdown(f'<div class="{pill_cls2}">{label2}</div>', unsafe_allow_html=True)
+    # ── אקורדיון: סגנון כתיבה ──
+    with st.expander("✍️ סגנון כתיבה", expanded=False):
+        style_options = ["none"] + list(PRESET_STYLES.keys())
+        _none_label = "סגנון מותאם (DOCX)" if st.session_state.style_bytes else "ללא (מהמחולל)"
+        style_display = [_none_label] + [PRESET_STYLES[k]["hebrew_name"] for k in PRESET_STYLES]
+        cur_style_idx = style_options.index(st.session_state.preset_style) if st.session_state.preset_style in style_options else 0
+        selected_style_idx = st.selectbox(
+            "סגנון כתיבה",
+            options=range(len(style_options)),
+            format_func=lambda i: style_display[i],
+            index=cur_style_idx,
+            label_visibility="collapsed",
+        )
+        st.session_state.preset_style = style_options[selected_style_idx]
+        if st.session_state.preset_style != "none":
+            st.caption(PRESET_STYLES[st.session_state.preset_style]["description"])
+
+        uploaded_style = st.file_uploader("העלה סגנון כתיבה (DOCX / PDF)", type=["docx", "pdf"], key=f"style_upload_{st.session_state.style_upload_key}")
+        if uploaded_style:
+            new_bytes = uploaded_style.read()
+            if new_bytes != st.session_state.style_bytes:
+                st.session_state.style_bytes = new_bytes
+                _style_suffix = uploaded_style.name.rsplit(".", 1)[-1].lower()
+                st.session_state.style_guide = data_loader.load_style_guide(new_bytes, suffix=_style_suffix)
+                st.session_state.preset_style = "none"
+                st.rerun()
+
+        _style_active = (
+            st.session_state.preset_style != "none"
+            or st.session_state.style_bytes
+            or st.session_state.generated_style_guide
+        )
+        if _style_active:
+            if st.button("🗑 איפוס סגנון כתיבה", use_container_width=True, key="reset_style_sidebar"):
+                st.session_state.preset_style = "none"
+                st.session_state.style_bytes = None
+                st.session_state.style_guide = None
+                st.session_state.generated_style_guide = ""
+                st.session_state.style_upload_key += 1
+                st.rerun()
+
+        if st.button("💾 שמור סגנון", use_container_width=True, key="save_style_btn"):
+            save_user_settings()
+            st.success("✓ נשמר")
+
+    # ── אקורדיון: מודל כתיבה שיווקית ──
+    with st.expander("📊 מודל כתיבה שיווקית", expanded=False):
+        fw_keys = list(MARKETING_FRAMEWORKS.keys())
+        fw_display = [MARKETING_FRAMEWORKS[k]["name"] for k in fw_keys]
+        cur_fw_idx = fw_keys.index(st.session_state.marketing_framework) if st.session_state.marketing_framework in fw_keys else 0
+        selected_fw_idx = st.selectbox(
+            "מודל כתיבה שיווקית",
+            options=range(len(fw_keys)),
+            format_func=lambda i: fw_display[i],
+            index=cur_fw_idx,
+            label_visibility="collapsed",
+            key="sb_marketing_fw",
+        )
+        st.session_state.marketing_framework = fw_keys[selected_fw_idx]
+        if st.session_state.marketing_framework != "none":
+            st.caption(MARKETING_FRAMEWORKS[st.session_state.marketing_framework]["description"])
+
+        if st.button("📖 מה הם מודלי כתיבה שיווקית?", key="toggle_fw_guide_btn", use_container_width=True):
+            st.session_state.show_fw_guide = not st.session_state.show_fw_guide
+
+        if st.session_state.show_fw_guide:
+            try:
+                fw_guide_path = Path(__file__).parent / "frameworks" / "מודלי כתיבה שיווקית.txt"
+                fw_guide_text = fw_guide_path.read_text(encoding="utf-8")
+                lines_html = ""
+                for line in fw_guide_text.splitlines():
+                    if line.startswith("## "):
+                        lines_html += f'<div style="font-size:0.88rem;font-weight:700;color:rgba(167,139,250,0.95);margin-top:1rem;margin-bottom:0.3rem;">{line[3:]}</div>'
+                    elif line.startswith("### "):
+                        lines_html += f'<div style="font-size:0.8rem;font-weight:600;color:rgba(255,255,255,0.75);margin-top:0.6rem;">{line[4:]}</div>'
+                    elif line.startswith("# "):
+                        lines_html += f'<div style="font-size:1rem;font-weight:700;color:white;margin-bottom:0.5rem;">{line[2:]}</div>'
+                    elif line.startswith("---"):
+                        lines_html += '<hr style="border:none;border-top:1px solid rgba(255,255,255,0.08);margin:0.8rem 0;">'
+                    elif line.startswith("- "):
+                        lines_html += f'<div style="font-size:0.8rem;color:rgba(255,255,255,0.65);padding:0.15rem 0 0.15rem 0.5rem;">• {line[2:]}</div>'
+                    elif line.strip():
+                        lines_html += f'<div style="font-size:0.8rem;color:rgba(255,255,255,0.6);line-height:1.7;margin-top:0.2rem;">{line}</div>'
+                st.markdown(
+                    f'<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);'
+                    f'border-radius:14px;padding:1.2rem 1.4rem;margin-top:0.5rem;direction:rtl;text-align:right;">'
+                    f'{lines_html}</div>',
+                    unsafe_allow_html=True,
+                )
+            except FileNotFoundError:
+                st.warning("קובץ המדריך לא נמצא")
+
+        if st.button("💾 שמור מודל", use_container_width=True, key="save_fw_btn"):
+            save_user_settings()
+            st.success("✓ נשמר")
+
+    # ── אקורדיון: הגדרות פוסט ──
+    with st.expander("📋 הגדרות פוסט", expanded=False):
+        selected_language = st.selectbox(
+            "🌐 שפת פלט", options=LANGUAGES,
+            index=LANGUAGES.index(st.session_state.language) if st.session_state.language in LANGUAGES else 0,
+            key="sb_language",
+        )
+        st.session_state.language = selected_language
+
+        ct_keys = list(CONTENT_TYPES.keys())
+        selected_ct = st.selectbox(
+            "📋 סוג תוכן", options=ct_keys,
+            index=ct_keys.index(st.session_state.content_type) if st.session_state.content_type in ct_keys else 0,
+            key="sb_content_type",
+        )
+        st.session_state.content_type = selected_ct
+        st.caption(f"מומלץ: {CONTENT_TYPES[selected_ct]['words']} מילים")
+
+        word_count_val = st.number_input(
+            "כמות מילים מותאמת (0 = ברירת מחדל)",
+            min_value=0, max_value=3000, value=st.session_state.word_count,
+            step=50, key="sb_word_count",
+        )
+        st.session_state.word_count = word_count_val
+
+        if st.button("💾 שמור הגדרות", use_container_width=True, key="save_post_settings_btn"):
+            save_user_settings()
+            st.success("✓ נשמר")
 
 
-# ── Tab navigation via JS ─────────────────────────────────────────────────────
-if st.session_state.get("_jump_to_ideas"):
+
+# ── Tab navigation: sidebar button OR Ideas-tab interaction ───────────────────
+# Emit the hidden trigger div at the TOP of the script (before any tab content renders)
+# so the MutationObserver switches to Ideas tab before Streamlit can flash another tab.
+if st.session_state.get("_jump_to_ideas") or st.session_state.get("_ideas_rerun_trigger"):
     st.session_state["_jump_to_ideas"] = False
-    st.components.v1.html("""
-    <script>
-    (function() {
-        const tabs = window.parent.document.querySelectorAll('button[role="tab"]');
-        for (let t of tabs) {
-            if (t.innerText.includes('מחולל רעיונות')) { t.click(); break; }
-        }
-    })();
-    </script>
-    """, height=0)
+    st.session_state["_ideas_rerun_trigger"] = False
+    st.markdown('<div id="liraz-nav-to-ideas" style="display:none"></div>', unsafe_allow_html=True)
 
 # ── HEADER ────────────────────────────────────────────────────────────────────
 _img_b64 = _get_header_image_b64()
 _bg_style = (
-    f"background-image: linear-gradient(rgba(5,5,15,0.15), rgba(5,5,20,0.2)), url('data:image/jpeg;base64,{_img_b64}'); background-size: cover; background-position: center center;"
+    f"background-image: linear-gradient(rgba(5,5,15,0.15), rgba(5,5,20,0.2)), url('data:image/jpeg;base64,{_img_b64}'); background-size: cover; background-position: center 40%;"
     if _img_b64
     else "background: linear-gradient(135deg, #0a0a0f, #0d0d1a);"
 )
@@ -809,21 +1108,23 @@ st.markdown(f"""
 <div style="
     {_bg_style}
     border-radius: 0 0 20px 20px;
-    margin: -4rem -4rem 2rem -4rem;
+    margin: calc(-6rem - 50px) -4rem 2rem -4rem;
     border: none;
     overflow: hidden;
-    height: 280px;
+    height: 430px;
     width: calc(100% + 8rem);
+    padding-top: 0;
 "></div>
 """, unsafe_allow_html=True)
 
 # ── TABS ──────────────────────────────────────────────────────────────────────
-tab_create, tab_visual, tab_ideas, tab_style, tab_archive = st.tabs([
+tab_create, tab_ideas, tab_style, tab_visual, tab_archive, tab_guide = st.tabs([
     "🏠 יצירה",
-    "🎨 הגדרות תמונה",
     "💡 מחולל רעיונות",
     "✍️ סגנון כתיבה",
+    "🎨 הגדרות תמונה",
     "🗂 ארכיון",
+    "📖 הוראות שימוש",
 ])
 
 
@@ -834,7 +1135,14 @@ with tab_create:
     # ── הגדרות תמונה ──
     col_settings, col_spacer = st.columns([2, 1])
     with col_settings:
-        st.markdown('<div class="section-label">⚙️ הגדרות תמונה</div>', unsafe_allow_html=True)
+        st.markdown("""
+<div style="direction:rtl; text-align:right; margin-bottom:1.2rem; margin-top:0.2rem;">
+    <div style="font-size:1.5rem; font-weight:800; color:white; letter-spacing:-0.01em; line-height:1.2;">
+        🎨 הגדרות תמונה
+    </div>
+    <div style="width:3rem; height:3px; background:linear-gradient(90deg,#a78bfa,#3b82f6);
+                border-radius:2px; margin-top:0.4rem; margin-right:0;"></div>
+</div>""", unsafe_allow_html=True)
         col_ar, col_txt = st.columns([2, 1])
         with col_ar:
             ar_label = st.radio(
@@ -870,9 +1178,9 @@ with tab_create:
     st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 
     # ── יצירה ──
-    if generate_btn:
+    if generate_btn and not st.session_state.get("generating", False):
         if not face_source:
-            st.error("יש להעלות תמונת ייחוס בטאב הגדרות ויזואל")
+            st.error("יש להעלות תמונת ייחוס בלשונית הגדרות תמונה")
             st.stop()
 
         # Resolve idea source: custom input overrides dropdown
@@ -883,79 +1191,92 @@ with tab_create:
             st.error("יש להזין רעיון — בחר מהרשימה או כתוב רעיון חופשי")
             st.stop()
 
-        wc = st.session_state.word_count if st.session_state.word_count > 0 else None
-        effective_style = st.session_state.generated_style_guide or style_guide
-        preset_instr = PRESET_STYLES[st.session_state.preset_style]["prompt_instruction"] if st.session_state.preset_style != "none" else ""
-        fw_instr = MARKETING_FRAMEWORKS[st.session_state.marketing_framework]["structure"] if st.session_state.marketing_framework != "none" else ""
-
-        col_prog, _ = st.columns([2, 1])
-        with col_prog:
-            progress = st.progress(0, text="מתחיל...")
-
-        progress.progress(10, text="✍️ כותב פוסט...")
+        st.session_state.generating = True
+        _this_gen_style = st.session_state.style_description  # capture for this run
+        st.session_state.style_description = ""               # reset so next generation starts clean
         try:
-            st.session_state.post_text = generator.generate_post(
-                effective_style, effective_category, effective_idea,
-                language=st.session_state.language,
-                content_type=st.session_state.content_type,
-                word_count=wc,
-                preset_style_instruction=preset_instr,
-                marketing_framework=fw_instr,
-                post_notes=st.session_state.post_notes,
-            )
-        except Exception as e:
-            st.error(f"שגיאה ביצירת פוסט: {e}")
-            st.stop()
+            wc = st.session_state.word_count if st.session_state.word_count > 0 else None
+            effective_style = st.session_state.generated_style_guide or style_guide
+            preset_instr = PRESET_STYLES[st.session_state.preset_style]["prompt_instruction"] if st.session_state.preset_style != "none" else ""
+            fw_instr = MARKETING_FRAMEWORKS[st.session_state.marketing_framework]["structure"] if st.session_state.marketing_framework != "none" else ""
 
-        image_text = ""
-        if st.session_state.add_text_to_image and st.session_state.post_text:
-            progress.progress(35, text="💬 יוצר טקסט לתמונה...")
+            col_prog, _ = st.columns([2, 1])
+            with col_prog:
+                progress = st.progress(0, text="מתחיל...")
+
+            _combined_notes = "\n".join(filter(None, [
+                st.session_state.post_notes,
+                f"הוראות ליישום הסגנון:\n{st.session_state.style_usage_instructions}"
+                if st.session_state.style_usage_instructions else ""
+            ]))
+            progress.progress(10, text="✍️ כותב פוסט...")
             try:
-                image_text = generator.generate_text_for_image(
-                    st.session_state.post_text, st.session_state.language
+                st.session_state.post_text = generator.generate_post(
+                    effective_style, effective_category, effective_idea,
+                    language=st.session_state.language,
+                    content_type=st.session_state.content_type,
+                    word_count=wc,
+                    preset_style_instruction=preset_instr,
+                    marketing_framework=fw_instr,
+                    post_notes=_combined_notes,
                 )
-            except Exception:
-                image_text = ""
+            except Exception as e:
+                st.error(f"שגיאה ביצירת פוסט: {e}")
+                st.stop()
 
-        progress.progress(50, text="🎨 מייצר תמונה (30-60 שניות)...")
-        try:
-            scene = generator.generate_image_prompt(st.session_state.post_text)
-            if st.session_state.image_notes:
-                scene = f"{scene}. Additional direction: {st.session_state.image_notes}"
-            st.session_state.image_bytes = generator.generate_image(
-                face_source, scene,
-                aspect_ratio=st.session_state.aspect_ratio,
-                style_description=st.session_state.style_description,
-                add_text=st.session_state.add_text_to_image,
-                text_content=image_text,
-            )
-        except Exception as e:
-            st.error(f"שגיאה ביצירת תמונה: {e}")
+            image_text = ""
+            if st.session_state.add_text_to_image and st.session_state.post_text:
+                progress.progress(35, text="💬 יוצר טקסט לתמונה...")
+                try:
+                    image_text = generator.generate_text_for_image(
+                        st.session_state.post_text, st.session_state.language
+                    )
+                except Exception:
+                    image_text = ""
 
-        progress.progress(100, text="✓ הושלם!")
-        progress.empty()
+            progress.progress(50, text="🎨 מייצר תמונה (30-60 שניות)...")
+            try:
+                scene = generator.generate_image_prompt(st.session_state.post_text)
+                if st.session_state.image_notes:
+                    scene = f"{scene}. Additional direction: {st.session_state.image_notes}"
+                _extra_refs = [r["bytes"] for r in st.session_state.reference_images[1:] if r]
+                st.session_state.image_bytes = generator.generate_image(
+                    face_source, scene,
+                    aspect_ratio=st.session_state.aspect_ratio,
+                    style_description=_this_gen_style,
+                    add_text=st.session_state.add_text_to_image,
+                    text_content=image_text,
+                    extra_reference_images=_extra_refs or None,
+                )
+            except Exception as e:
+                st.error(f"שגיאה ביצירת תמונה: {e}")
 
-        outputs_dir = data_loader.ensure_outputs_dir()
-        if st.session_state.post_text and st.session_state.image_bytes:
-            generator.save_outputs(
-                st.session_state.post_text, st.session_state.image_bytes, outputs_dir,
-                category=effective_category, idea=effective_idea,
-            )
-            archive_entry = {
-                "post_text": st.session_state.post_text,
-                "image_bytes": st.session_state.image_bytes,
-                "category": effective_category,
-                "idea": effective_idea,
-                "content_type": st.session_state.content_type,
-                "language": st.session_state.language,
-                "preset_style": PRESET_STYLES[st.session_state.preset_style]["hebrew_name"] if st.session_state.preset_style != "none" else "ללא",
-                "marketing_framework": st.session_state.marketing_framework,
-                "timestamp": int(time.time()),
-                "timestamp_str": time.strftime("%d/%m/%Y %H:%M"),
-            }
-            st.session_state.archive.append(archive_entry)
-            if len(st.session_state.archive) > 20:
-                st.session_state.archive = st.session_state.archive[-20:]
+            progress.progress(100, text="✓ הושלם!")
+            progress.empty()
+
+            outputs_dir = data_loader.ensure_outputs_dir()
+            if st.session_state.post_text and st.session_state.image_bytes:
+                generator.save_outputs(
+                    st.session_state.post_text, st.session_state.image_bytes, outputs_dir,
+                    category=effective_category, idea=effective_idea,
+                )
+                archive_entry = {
+                    "post_text": st.session_state.post_text,
+                    "image_bytes": st.session_state.image_bytes,
+                    "category": effective_category,
+                    "idea": effective_idea,
+                    "content_type": st.session_state.content_type,
+                    "language": st.session_state.language,
+                    "preset_style": PRESET_STYLES[st.session_state.preset_style]["hebrew_name"] if st.session_state.preset_style != "none" else "ללא",
+                    "marketing_framework": st.session_state.marketing_framework,
+                    "timestamp": int(time.time()),
+                    "timestamp_str": time.strftime("%d/%m/%Y %H:%M"),
+                }
+                st.session_state.archive.append(archive_entry)
+                if len(st.session_state.archive) > 20:
+                    st.session_state.archive = st.session_state.archive[-20:]
+        finally:
+            st.session_state.generating = False
 
     # ── תצוגת תוצאות ──
     col_post, col_img = st.columns([1, 1], gap="large")
@@ -977,6 +1298,16 @@ with tab_create:
             with c2:
                 if st.button("📋 העתק", use_container_width=True):
                     st.write("הועתק!")
+            st.markdown('<div class="section-label" style="margin-top:1rem;">💬 הערות לשיפור</div>', unsafe_allow_html=True)
+            _retry_fb = st.text_area(
+                "", value=st.session_state.get("retry_feedback", ""),
+                height=80, key="retry_feedback_input",
+                placeholder="הוסיפו הנחיות, שינויים, או בקשות לפני לחיצה על נסה שוב...",
+                label_visibility="collapsed",
+            )
+            if _retry_fb != st.session_state.retry_feedback:
+                st.session_state.retry_feedback = _retry_fb
+
             if st.button("🔄 נסה שוב — פוסט בלבד", key="retry_post_btn", use_container_width=True):
                 if not face_source:
                     st.error("יש להעלות תמונת ייחוס")
@@ -989,6 +1320,11 @@ with tab_create:
                             effective_style = st.session_state.generated_style_guide or style_guide
                             preset_instr = PRESET_STYLES[st.session_state.preset_style]["prompt_instruction"] if st.session_state.preset_style != "none" else ""
                             fw_instr = MARKETING_FRAMEWORKS[st.session_state.marketing_framework]["structure"] if st.session_state.marketing_framework != "none" else ""
+                            _retry_combined_notes = "\n".join(filter(None, [
+                                st.session_state.post_notes,
+                                f"הוראות ליישום הסגנון:\n{st.session_state.style_usage_instructions}"
+                                if st.session_state.style_usage_instructions else ""
+                            ]))
                             st.session_state.post_text = generator.generate_post(
                                 effective_style, _retry_category, _retry_idea,
                                 language=st.session_state.language,
@@ -996,7 +1332,8 @@ with tab_create:
                                 word_count=wc,
                                 preset_style_instruction=preset_instr,
                                 marketing_framework=fw_instr,
-                                post_notes=st.session_state.post_notes,
+                                post_notes=_retry_combined_notes,
+                                retry_feedback=st.session_state.retry_feedback,
                             )
                             st.rerun()
                         except Exception as e:
@@ -1036,12 +1373,16 @@ with tab_create:
                             scene = generator.generate_image_prompt(st.session_state.post_text)
                             if st.session_state.image_notes:
                                 scene = f"{scene}. Additional direction: {st.session_state.image_notes}"
+                            if st.session_state.retry_feedback:
+                                scene = f"{scene}. User feedback: {st.session_state.retry_feedback}"
+                            _extra_refs = [r["bytes"] for r in st.session_state.reference_images[1:] if r]
                             st.session_state.image_bytes = generator.generate_image(
                                 face_source, scene,
                                 aspect_ratio=st.session_state.aspect_ratio,
                                 style_description=st.session_state.style_description,
                                 add_text=st.session_state.add_text_to_image,
                                 text_content=image_text,
+                                extra_reference_images=_extra_refs or None,
                             )
                             st.rerun()
                         except Exception as e:
@@ -1079,23 +1420,39 @@ with tab_visual:
     col_char, col_style_img = st.columns(2, gap="large")
 
     with col_char:
-        st.markdown('<div class="section-label">📸 תמונת ייחוס</div>', unsafe_allow_html=True)
-        uploaded_char = st.file_uploader(
-            "העלה תמונת ייחוס (פנים, אביזר, מוצר, אנשים...)",
-            type=["jpg", "jpeg", "png", "webp"],
-            key="char_upload",
-        )
-        if uploaded_char:
-            char_bytes = uploaded_char.read()
-            if char_bytes != st.session_state.character_image_bytes:
-                st.session_state.character_image_bytes = char_bytes
-                st.rerun()  # rerun so sidebar renders with the new image
+        st.markdown('<div class="section-label">📸 תמונות ייחוס (עד 3)</div>', unsafe_allow_html=True)
+        st.caption("העלה עד 3 תמונות ייחוס: דמות/פנים, אובייקט/מוצר, רקע/סביבה")
+        ref_labels = ["דמות / פנים", "אובייקט / מוצר", "רקע / סביבה"]
+        _did_rerun = False
+        for slot_idx, slot_label in enumerate(ref_labels):
+            uploaded_ref = st.file_uploader(
+                slot_label,
+                type=["jpg", "jpeg", "png", "webp"],
+                key=f"ref_img_{slot_idx}",
+            )
+            if uploaded_ref:
+                _ref_bytes = uploaded_ref.read()
+                _current = st.session_state.reference_images[slot_idx]
+                if _current is None or _current.get("bytes") != _ref_bytes:
+                    st.session_state.reference_images[slot_idx] = {"label": slot_label, "bytes": _ref_bytes}
+                    if slot_idx == 0:
+                        st.session_state.character_image_bytes = _ref_bytes
+                    _did_rerun = True
 
-        if st.session_state.character_image_bytes:
-            st.image(st.session_state.character_image_bytes, use_container_width=True)
-            if st.button("🗑 הסר תמונה", key="remove_char"):
-                st.session_state.character_image_bytes = None
-                st.rerun()
+            existing_ref = st.session_state.reference_images[slot_idx]
+            if existing_ref:
+                col_thumb, col_rm = st.columns([3, 1])
+                with col_thumb:
+                    st.image(existing_ref["bytes"], width=90)
+                with col_rm:
+                    if st.button("🗑", key=f"rm_ref_{slot_idx}", help=f"הסר {slot_label}"):
+                        st.session_state.reference_images[slot_idx] = None
+                        if slot_idx == 0:
+                            st.session_state.character_image_bytes = None
+                        _did_rerun = True
+
+        if _did_rerun:
+            st.rerun()
 
     with col_style_img:
         st.markdown('<div class="section-label">🎨 תמונות סגנון</div>', unsafe_allow_html=True)
@@ -1146,12 +1503,7 @@ with tab_visual:
     )
     st.session_state.free_style_text = free_style_text
 
-    col_apply, col_enhance = st.columns([1, 1])
-    with col_apply:
-        if st.button("✅ החל סגנון חופשי", key="apply_free_style_btn", use_container_width=True):
-            if free_style_text.strip():
-                st.session_state.style_description = free_style_text.strip()
-                st.success("✓ הסגנון עודכן")
+    col_enhance, col_apply = st.columns([1, 1])
     with col_enhance:
         if st.button("✨ שפר סגנון", key="enhance_style_btn", use_container_width=True):
             if free_style_text.strip():
@@ -1165,6 +1517,15 @@ with tab_visual:
                         st.error(f"שגיאה: {e}")
             else:
                 st.warning("כתוב תיאור סגנון תחילה")
+    with col_apply:
+        if st.button("✅ החל סגנון חופשי", key="apply_free_style_btn", use_container_width=True):
+            if free_style_text.strip():
+                st.session_state.style_description = free_style_text.strip()
+                st.success("✓ הסגנון עודכן")
+
+    if st.button("💾 שמור הגדרות תמונה", use_container_width=True, key="save_visual_settings_btn"):
+        save_user_settings()
+        st.success("✓ נשמר")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1197,48 +1558,78 @@ with tab_ideas:
     st.markdown('<div class="section-label">💡 מחולל רעיונות לתוכן</div>', unsafe_allow_html=True)
 
     # ── שלב 1: תחום ──
-    col_domain, col_apply_domain = st.columns([4, 1])
+    col_domain, col_confirm = st.columns([5, 1])
     with col_domain:
         domain_input = st.text_input(
             "מהו התחום שלך?",
             placeholder="למשל: פיזיותרפיה, שיווק דיגיטלי, בישול בריא...",
             key="ideas_domain_input",
         )
-    with col_apply_domain:
-        st.markdown('<div style="height:1.9rem"></div>', unsafe_allow_html=True)
-        apply_domain_btn = st.button("אישור ◀", key="apply_domain_btn", use_container_width=True)
+    with col_confirm:
+        st.markdown('<div style="height:1.75rem"></div>', unsafe_allow_html=True)
+        confirm_domain_btn = st.button("אישור ◀", key="confirm_domain_btn", use_container_width=True)
 
-    if domain_input:
-        if st.button("🎯 הצע קהלי יעד", key="suggest_audiences_btn") or apply_domain_btn:
-            with st.spinner("מייצר קהלי יעד..."):
-                try:
-                    audiences = generator.generate_target_audiences(
-                        domain_input, st.session_state.language
-                    )
-                    st.session_state.target_audiences = audiences
-                    st.session_state.ideas_table = {}
-                    st.session_state.ideas_tables_history = []
-                    st.session_state.ideas_table_idx = 0
-                except Exception as e:
-                    st.error(f"שגיאה: {e}")
+    # Auto-generate on input commit (Enter/blur) OR explicit button click.
+    # Two-rerun strategy: Rerun 1 → navigate to Ideas tab; Rerun 2 → run the API call.
+    # This prevents Streamlit from flashing the Creation tab during the spinner.
+    _should_generate = domain_input and (
+        domain_input != st.session_state.get("_last_ideas_domain", "") or confirm_domain_btn
+    )
+    if _should_generate:
+        # Store intent and reset state, then hand off to a dedicated rerun
+        st.session_state["_last_ideas_domain"] = domain_input
+        st.session_state["_pending_audience_gen"] = domain_input
+        st.session_state.target_audiences = []
+        st.session_state.ideas_table = {}
+        st.session_state.ideas_tables_history = []
+        st.session_state.ideas_table_idx = 0
+        st.session_state["_jump_to_ideas"] = True  # nav trigger fires at top of next rerun
+        st.rerun()
+
+    # Rerun 2: tab is already active, now run the pending API call
+    if st.session_state.get("_pending_audience_gen"):
+        _pending_domain = st.session_state["_pending_audience_gen"]
+        st.session_state["_pending_audience_gen"] = ""
+        with st.spinner("מייצר קהלי יעד..."):
+            try:
+                audiences = generator.generate_target_audiences(
+                    _pending_domain, st.session_state.language
+                )
+                st.session_state.target_audiences = audiences
+            except Exception as e:
+                st.error(f"שגיאה: {e}")
+
+    if st.session_state.get("_pending_table_gen"):
+        _ptg = st.session_state["_pending_table_gen"]
+        st.session_state["_pending_table_gen"] = {}
+        _spinner_msg = "מייצר עוד רעיונות..." if _ptg.get("mode") == "append" else "מייצר טבלת רעיונות..."
+        with st.spinner(_spinner_msg):
+            try:
+                table = generator.generate_ideas_table(
+                    _ptg["domain"], _ptg["audience"], st.session_state.language
+                )
+                st.session_state.ideas_table = table
+                st.session_state.ideas_tables_history.append(table)
+                st.session_state.ideas_table_idx = len(st.session_state.ideas_tables_history) - 1
+            except Exception as e:
+                st.error(f"שגיאה: {e}")
+        st.session_state["_jump_to_ideas"] = True
+        st.rerun()
 
     # ── שלב 2: בחירת קהל יעד ──
     if st.session_state.target_audiences:
         st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
         st.markdown('<div class="section-label">👥 סוג הקהל שלך</div>', unsafe_allow_html=True)
 
-        # Checkboxes for each suggested audience
+        # Checkboxes — two columns
         checked_audiences = []
-        cols_per_row = 2
         audience_list = st.session_state.target_audiences
-        for i in range(0, len(audience_list), cols_per_row):
-            row_cols = st.columns(cols_per_row)
-            for j, col in enumerate(row_cols):
-                idx = i + j
-                if idx < len(audience_list):
-                    with col:
-                        if st.checkbox(audience_list[idx], key=f"aud_cb_{idx}"):
-                            checked_audiences.append(audience_list[idx])
+        aud_col1, aud_col2 = st.columns(2)
+        for idx, aud in enumerate(audience_list):
+            col = aud_col1 if idx % 2 == 0 else aud_col2
+            with col:
+                if st.checkbox(aud, key=f"aud_cb_{idx}", on_change=_ideas_tab_action):
+                    checked_audiences.append(aud)
 
         custom_audience = st.text_input(
             "✏️ קהל יעד ספציפי אחר (אופציונלי)",
@@ -1253,17 +1644,13 @@ with tab_ideas:
             st.caption(f"נבחרו: {', '.join(final_audience_list)}")
 
             if st.button("📊 צור טבלת רעיונות", key="gen_ideas_table_btn", use_container_width=True):
-                audience_str = ", ".join(final_audience_list)
-                with st.spinner("מייצר טבלת רעיונות (מוטיבציות, חששות, דברים שלא יודעים)..."):
-                    try:
-                        table = generator.generate_ideas_table(
-                            domain_input, audience_str, st.session_state.language
-                        )
-                        st.session_state.ideas_table = table
-                        st.session_state.ideas_tables_history.append(table)
-                        st.session_state.ideas_table_idx = len(st.session_state.ideas_tables_history) - 1
-                    except Exception as e:
-                        st.error(f"שגיאה: {e}")
+                st.session_state["_pending_table_gen"] = {
+                    "domain": domain_input,
+                    "audience": ", ".join(final_audience_list),
+                    "mode": "new",
+                }
+                st.session_state["_jump_to_ideas"] = True
+                st.rerun()
         else:
             st.info("סמן לפחות קהל יעד אחד כדי להמשיך")
 
@@ -1296,51 +1683,53 @@ with tab_ideas:
         current_table = history[st.session_state.ideas_table_idx]
 
         # Render each category as a plain-text card
+        _cat_meta = {
+            "מוטיבציות":                  ("🎯", "rgba(52,211,153,0.15)",  "rgba(52,211,153,0.35)"),
+            "חששות":                      ("😟", "rgba(239,68,68,0.1)",    "rgba(239,68,68,0.3)"),
+            "דברים שאנשים לא יודעים":     ("💡", "rgba(251,191,36,0.1)",   "rgba(251,191,36,0.3)"),
+        }
         for category, ideas_list in current_table.items():
+            emoji, bg_tint, border_tint = _cat_meta.get(category, ("📌", "rgba(255,255,255,0.03)", "rgba(255,255,255,0.07)"))
             ideas_html = "".join(
-                f'<div style="padding:0.35rem 0; border-bottom:1px solid rgba(255,255,255,0.05); color:rgba(255,255,255,0.82); font-size:0.93rem; line-height:1.6;">'
-                f'<span style="color:rgba(167,139,250,0.7); font-weight:600; margin-left:0.5rem;">{i}.</span> {idea}'
+                f'<div style="padding:0.45rem 0; border-bottom:1px solid rgba(255,255,255,0.06); color:rgba(255,255,255,0.88); font-size:1rem; line-height:1.65;">'
+                f'<span style="color:rgba(167,139,250,0.8); font-weight:700; margin-left:0.5rem;">{i}.</span> {idea}'
                 f'</div>'
                 for i, idea in enumerate(ideas_list, 1)
             )
             st.markdown(f"""
-<div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.07);
+<div style="background:{bg_tint}; border:1px solid {border_tint};
      border-radius:16px; padding:1.2rem 1.5rem; margin-bottom:1rem; direction:rtl; text-align:right;">
-  <div style="font-size:0.78rem; font-weight:700; letter-spacing:0.12em; color:rgba(167,139,250,0.9);
-       text-transform:uppercase; margin-bottom:0.8rem;">{category}</div>
+  <div style="font-size:1.1rem; font-weight:800; color:white; margin-bottom:0.9rem; letter-spacing:0.01em;">
+      {emoji}&nbsp; {category}
+  </div>
   {ideas_html}
 </div>""", unsafe_allow_html=True)
 
-        # Action buttons
-        col_dl, col_load, col_more = st.columns(3)
-        with col_dl:
-            docx_bytes = data_loader.create_ideas_docx(current_table)
-            st.download_button(
-                "⬇ הורד DOCX", data=docx_bytes,
-                file_name=f"ideas_table_{idx+1}.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                use_container_width=True,
-                key=f"dl_ideas_{idx}",
-            )
+        # Action buttons — row 1: download DOCX (full width)
+        docx_bytes = data_loader.create_ideas_docx(current_table)
+        st.download_button(
+            "⬇ הורד DOCX", data=docx_bytes,
+            file_name=f"ideas_table_{idx+1}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True,
+            key=f"dl_ideas_{idx}",
+        )
+        # Row 2: equal-width Load + More
+        col_load, col_more = st.columns([1, 1])
         with col_load:
             if st.button("📥 טען לאפליקציה", key=f"load_ideas_btn_{idx}", use_container_width=True):
                 st.session_state.post_ideas = current_table
                 st.rerun()
         with col_more:
             if st.button("➕ צור עוד 30 רעיונות", key="more_ideas_btn", use_container_width=True):
-                if domain_input and final_audience_list if st.session_state.target_audiences else domain_input:
-                    audience_str = ", ".join(final_audience_list) if st.session_state.target_audiences else ""
-                    with st.spinner("מייצר עוד רעיונות..."):
-                        try:
-                            new_table = generator.generate_ideas_table(
-                                domain_input, audience_str, st.session_state.language
-                            )
-                            st.session_state.ideas_table = new_table
-                            st.session_state.ideas_tables_history.append(new_table)
-                            st.session_state.ideas_table_idx = len(st.session_state.ideas_tables_history) - 1
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"שגיאה: {e}")
+                if domain_input and (final_audience_list if st.session_state.target_audiences else domain_input):
+                    st.session_state["_pending_table_gen"] = {
+                        "domain": domain_input,
+                        "audience": ", ".join(final_audience_list) if st.session_state.target_audiences else "",
+                        "mode": "append",
+                    }
+                    st.session_state["_jump_to_ideas"] = True
+                    st.rerun()
                 else:
                     st.warning("יש להזין תחום כדי לייצר עוד רעיונות")
 
@@ -1388,15 +1777,29 @@ with tab_style:
 
     if selected_preset_key != "none":
         preset_data = PRESET_STYLES[selected_preset_key]
+        # Build styled summary with bold+white sub-headers
+        _summary_html = ""
+        for _line in preset_data.get('summary', preset_data['description']).splitlines():
+            if _line.startswith("### "):
+                _summary_html += f'<div style="font-weight:700;color:rgba(255,255,255,0.95);font-size:0.9rem;margin-top:0.7rem;margin-bottom:0.2rem;">{_line[4:]}</div>'
+            elif _line.startswith("## "):
+                _summary_html += f'<div style="font-weight:700;color:rgba(167,139,250,0.9);font-size:0.92rem;margin-top:0.9rem;margin-bottom:0.2rem;">{_line[3:]}</div>'
+            elif _line.startswith("# "):
+                _summary_html += f'<div style="font-weight:700;color:white;font-size:0.95rem;margin-bottom:0.3rem;">{_line[2:]}</div>'
+            elif _line.startswith("- "):
+                _summary_html += f'<div style="color:rgba(255,255,255,0.7);font-size:0.88rem;line-height:1.6;padding-right:0.5rem;">• {_line[2:]}</div>'
+            elif _line.strip():
+                _summary_html += f'<div style="color:rgba(255,255,255,0.65);font-size:0.88rem;line-height:1.6;">{_line}</div>'
         st.markdown(f"""
-        <div class="glass-card">
-            <div style="font-size:1.05rem; font-weight:600; margin-bottom:0.4rem;">{preset_data['hebrew_name']} — {preset_data['name']}</div>
-            <div style="color:rgba(255,255,255,0.6); font-size:0.88rem; margin-bottom:0.6rem;">{preset_data['description']}</div>
-            <div style="color:rgba(255,255,255,0.55); font-size:0.82rem; white-space:pre-wrap; direction:rtl; text-align:right;">{preset_data.get('summary', preset_data['description'])}</div>
+        <div class="glass-card" style="direction:rtl;text-align:right;">
+            <div style="font-size:1.05rem;font-weight:700;color:white;margin-bottom:0.3rem;">{preset_data['hebrew_name']} — {preset_data['name']}</div>
+            <div style="color:rgba(167,139,250,0.85);font-size:0.9rem;margin-bottom:0.8rem;">{preset_data['description']}</div>
+            {_summary_html}
         </div>
         """, unsafe_allow_html=True)
         if st.button("✅ החל סגנון זה", key="apply_preset_from_tab4"):
             st.session_state.preset_style = selected_preset_key
+            st.session_state.style_mode = None  # close personal style generator
             st.rerun()
     else:
         st.info("בחר סגנון מוכן מהרשימה, או השתמש במחולל הסגנון האישי שלמטה.")
@@ -1427,141 +1830,171 @@ with tab_style:
     st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
     st.markdown('<div class="section-label">✍️ מחולל סגנון אישי</div>', unsafe_allow_html=True)
 
-    # ── בחירת מסלול ──
     if "style_mode" not in st.session_state:
         st.session_state.style_mode = None  # None | "analyze" | "upload"
 
-    col_btn_analyze, col_btn_upload = st.columns(2, gap="large")
-    with col_btn_analyze:
-        st.markdown("""
-        <div class="glass-card" style="text-align:center; min-height:110px; display:flex; flex-direction:column; align-items:center; justify-content:center;">
-            <div style="font-size:2rem; margin-bottom:0.4rem;">🔬</div>
-            <div style="color:rgba(255,255,255,0.8); font-weight:600; margin-bottom:0.3rem;">זיהוי סגנון כתיבה</div>
-            <div style="color:rgba(255,255,255,0.4); font-size:0.82rem;">העלה דוגמאות — AI ינתח את הסגנון</div>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("בחר", key="mode_analyze_btn", use_container_width=True):
-            st.session_state.style_mode = "analyze"
-            st.rerun()
+    # Exclusion: if preset selected, hide personal generator
+    if st.session_state.preset_style != "none":
+        st.info("⚠️ סגנון מוכן פעיל — איפוס הסגנון יאפשר שימוש במחולל האישי")
+    else:
+        # ── בחירת מסלול ──
+        col_btn_analyze, col_btn_upload = st.columns(2, gap="large")
+        with col_btn_analyze:
+            st.markdown("""
+            <div class="glass-card" style="text-align:center; min-height:110px; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                <div style="font-size:2rem; margin-bottom:0.4rem;">🔬</div>
+                <div style="color:rgba(255,255,255,0.8); font-weight:600; margin-bottom:0.3rem;">זיהוי סגנון כתיבה</div>
+                <div style="color:rgba(255,255,255,0.4); font-size:0.82rem;">העלה דוגמאות — AI ינתח את הסגנון</div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("בחר", key="mode_analyze_btn", use_container_width=True):
+                st.session_state.style_mode = "analyze"
+                st.rerun()
 
-    with col_btn_upload:
-        st.markdown("""
-        <div class="glass-card" style="text-align:center; min-height:110px; display:flex; flex-direction:column; align-items:center; justify-content:center;">
-            <div style="font-size:2rem; margin-bottom:0.4rem;">📂</div>
-            <div style="color:rgba(255,255,255,0.8); font-weight:600; margin-bottom:0.3rem;">טעינת סגנון קיים</div>
-            <div style="color:rgba(255,255,255,0.4); font-size:0.82rem;">יש לך כבר סט הוראות? העלה אותו</div>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("בחר", key="mode_upload_btn", use_container_width=True):
-            st.session_state.style_mode = "upload"
-            st.rerun()
+        with col_btn_upload:
+            st.markdown("""
+            <div class="glass-card" style="text-align:center; min-height:110px; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                <div style="font-size:2rem; margin-bottom:0.4rem;">📂</div>
+                <div style="color:rgba(255,255,255,0.8); font-weight:600; margin-bottom:0.3rem;">טעינת סגנון קיים</div>
+                <div style="color:rgba(255,255,255,0.4); font-size:0.82rem;">יש לך כבר סט הוראות? העלה אותו</div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("בחר", key="mode_upload_btn", use_container_width=True):
+                st.session_state.style_mode = "upload"
+                st.rerun()
 
-    # ── מסלול א: זיהוי סגנון ──
-    if st.session_state.style_mode == "analyze":
-        st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-label">🔬 זיהוי סגנון כתיבה</div>', unsafe_allow_html=True)
-        st.info("העלה 4-5 תכנים שכתבת (פוסטים, מאמרים, בלוגים) שדומים בסגנונם. ככל שהדוגמאות יותר דומות — הניתוח יהיה מדויק יותר.")
+        # ── מסלול א: זיהוי סגנון ──
+        if st.session_state.style_mode == "analyze":
+            st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-label">🔬 זיהוי סגנון כתיבה</div>', unsafe_allow_html=True)
+            st.info("העלה 4-5 תכנים שכתבת (פוסטים, מאמרים, בלוגים). ככל שהדוגמאות דומות יותר — הניתוח מדויק יותר.")
 
-        col_upload_s, col_paste_s = st.columns(2, gap="large")
-        with col_upload_s:
-            uploaded_samples = st.file_uploader(
-                "העלה קבצי טקסט (TXT / DOCX / PDF)",
-                type=["txt", "docx", "pdf"],
-                accept_multiple_files=True,
-                key="writing_samples_upload",
-            )
-        with col_paste_s:
+            # Paste area with Next/Finish accumulation
             pasted_text = st.text_area(
-                "או הדבק טקסט ישירות",
-                height=200,
-                key="pasted_writing_sample",
-                placeholder="הדבק כאן תוכן לדוגמה...",
+                "הדבק תוכן לדוגמה",
+                height=180,
+                key=f"pasted_writing_sample_{st.session_state.get('pasted_sample_key', 0)}",
+                placeholder="הדבק פוסט, מאמר, או כל טקסט שכתבת...",
             )
 
-        # Collect samples
-        samples_to_analyze = []
-        if uploaded_samples:
-            for uf in uploaded_samples:
+            col_next, col_buf_info = st.columns([1, 1])
+            with col_next:
+                if st.button("הבא ←", key="style_next_btn", use_container_width=True):
+                    if pasted_text.strip():
+                        st.session_state.style_text_buffer.append(pasted_text.strip())
+                        st.session_state.pasted_sample_key = st.session_state.get("pasted_sample_key", 0) + 1
+                        st.rerun()
+            with col_buf_info:
+                buf_count = len(st.session_state.style_text_buffer)
+                if buf_count > 0:
+                    st.caption(f"✓ {buf_count} קטע{'ים' if buf_count != 1 else ''} נשמר{'ו' if buf_count != 1 else ''}")
+
+            col_upload_s, col_clear_buf = st.columns([2, 1])
+            with col_upload_s:
+                uploaded_samples = st.file_uploader(
+                    "או העלה קבצי טקסט (TXT / DOCX / PDF)",
+                    type=["txt", "docx", "pdf"],
+                    accept_multiple_files=True,
+                    key="writing_samples_upload",
+                )
+            with col_clear_buf:
+                if st.session_state.style_text_buffer:
+                    if st.button("🗑 נקה בפר", key="clear_style_buf_btn", use_container_width=True):
+                        st.session_state.style_text_buffer = []
+                        st.rerun()
+
+            # Collect file samples
+            uploaded_file_samples = []
+            if uploaded_samples:
+                for uf in uploaded_samples:
+                    try:
+                        if uf.name.endswith(".txt"):
+                            uploaded_file_samples.append(uf.read().decode("utf-8", errors="replace"))
+                        elif uf.name.endswith(".docx"):
+                            from docx import Document as _Doc
+                            import io as _io
+                            doc_obj = _Doc(_io.BytesIO(uf.read()))
+                            text = "\n".join(p.text for p in doc_obj.paragraphs if p.text.strip())
+                            uploaded_file_samples.append(text)
+                        elif uf.name.endswith(".pdf"):
+                            import io as _io
+                            import pypdf as _pypdf
+                            reader = _pypdf.PdfReader(_io.BytesIO(uf.read()))
+                            text = "\n".join(p.extract_text() or "" for p in reader.pages).strip()
+                            if text:
+                                uploaded_file_samples.append(text)
+                    except Exception:
+                        pass
+
+            # Merge buffer + current paste + files
+            all_samples = st.session_state.style_text_buffer + uploaded_file_samples
+            if pasted_text.strip():
+                all_samples = all_samples + [pasted_text.strip()]
+
+            n = len(all_samples)
+            if n > 0:
+                color = "#34d399" if n >= 4 else "#f59e0b"
+                st.markdown(
+                    f'<div style="color:{color}; font-size:0.85rem; margin-bottom:0.5rem;">'
+                    f'{"✓" if n >= 4 else "⚠"} {n} קטעים {"— מספיק לניתוח מדויק" if n >= 4 else "— מומלץ לפחות 4"}'
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+                _analyze_label = "🔬 נתח וצור מדריך סגנון" if not st.session_state.style_text_buffer else "✅ סיום — נתח את כל הקטעים"
+                if st.button(_analyze_label, key="analyze_writing_btn", use_container_width=True):
+                    with st.spinner("מנתח סגנון כתיבה (תחביר, אוצר מילים, טון, דימויים, קצב)..."):
+                        try:
+                            guide = generator.generate_writing_style(all_samples)
+                            st.session_state.generated_style_guide = guide
+                            st.session_state.style_text_buffer = []
+                            import re as _re
+                            _usage_lines = [l for l in guide.splitlines()
+                                            if _re.match(r'^[-•\d\*]', l.strip()) and len(l.strip()) > 10]
+                            st.session_state.style_usage_instructions = "\n".join(_usage_lines[:15])
+                            st.success("✓ מדריך סגנון נוצר")
+                        except Exception as e:
+                            st.error(f"שגיאה: {e}")
+
+            if st.button("← חזור", key="back_from_analyze"):
+                st.session_state.style_mode = None
+                st.rerun()
+
+        # ── מסלול ב: טעינת סגנון קיים ──
+        elif st.session_state.style_mode == "upload":
+            st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
+            st.markdown('<div class="section-label">📂 טעינת סגנון קיים</div>', unsafe_allow_html=True)
+            st.info("העלה קובץ DOCX או TXT שמכיל סט הוראות לסגנון כתיבה.")
+
+            existing_guide_file = st.file_uploader(
+                "העלה קובץ סגנון כתיבה",
+                type=["txt", "docx"],
+                key="existing_style_upload",
+            )
+            if existing_guide_file:
                 try:
-                    if uf.name.endswith(".txt"):
-                        samples_to_analyze.append(uf.read().decode("utf-8", errors="replace"))
-                    elif uf.name.endswith(".docx"):
+                    raw_bytes = existing_guide_file.read()
+                    if existing_guide_file.name.endswith(".txt"):
+                        guide_text = raw_bytes.decode("utf-8", errors="replace")
+                    else:
                         from docx import Document as _Doc
                         import io as _io
-                        doc_obj = _Doc(_io.BytesIO(uf.read()))
-                        text = "\n".join(p.text for p in doc_obj.paragraphs if p.text.strip())
-                        samples_to_analyze.append(text)
-                    elif uf.name.endswith(".pdf"):
-                        import io as _io
-                        import pypdf as _pypdf
-                        reader = _pypdf.PdfReader(_io.BytesIO(uf.read()))
-                        text = "\n".join(p.extract_text() or "" for p in reader.pages).strip()
-                        if text:
-                            samples_to_analyze.append(text)
-                except Exception:
-                    pass
-        if pasted_text.strip():
-            samples_to_analyze.append(pasted_text.strip())
+                        doc_obj = _Doc(_io.BytesIO(raw_bytes))
+                        guide_text = "\n".join(p.text for p in doc_obj.paragraphs if p.text.strip())
+                    st.session_state.generated_style_guide = guide_text
+                    st.session_state.style_bytes = raw_bytes
+                    st.session_state.style_guide = guide_text
+                    st.session_state.preset_style = "none"
+                    st.session_state.style_upload_key += 1
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"שגיאה בקריאת הקובץ: {e}")
 
-        n = len(samples_to_analyze)
-        if n > 0:
-            color = "#34d399" if n >= 4 else "#f59e0b"
-            st.markdown(
-                f'<div style="color:{color}; font-size:0.85rem; margin-bottom:0.5rem;">'
-                f'{"✓" if n >= 4 else "⚠"} {n} דוגמאות {"— מספיק לניתוח מדויק" if n >= 4 else "— מומלץ לפחות 4"}'
-                f"</div>",
-                unsafe_allow_html=True,
-            )
-
-            if st.button("🔬 נתח וצור מדריך סגנון", key="analyze_writing_btn", use_container_width=True):
-                with st.spinner("מנתח סגנון כתיבה (תחביר, אוצר מילים, טון, דימויים, קצב)..."):
-                    try:
-                        guide = generator.generate_writing_style(samples_to_analyze)
-                        st.session_state.generated_style_guide = guide
-                        st.success("✓ מדריך סגנון נוצר")
-                    except Exception as e:
-                        st.error(f"שגיאה: {e}")
-
-        if st.button("← חזור", key="back_from_analyze"):
-            st.session_state.style_mode = None
-            st.rerun()
-
-    # ── מסלול ב: טעינת סגנון קיים ──
-    elif st.session_state.style_mode == "upload":
-        st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-label">📂 טעינת סגנון קיים</div>', unsafe_allow_html=True)
-        st.info("העלה קובץ DOCX או TXT שמכיל סט הוראות לסגנון כתיבה.")
-
-        existing_guide_file = st.file_uploader(
-            "העלה קובץ סגנון כתיבה",
-            type=["txt", "docx"],
-            key="existing_style_upload",
-        )
-        if existing_guide_file:
-            try:
-                raw_bytes = existing_guide_file.read()
-                if existing_guide_file.name.endswith(".txt"):
-                    guide_text = raw_bytes.decode("utf-8", errors="replace")
-                else:
-                    from docx import Document as _Doc
-                    import io as _io
-                    doc_obj = _Doc(_io.BytesIO(raw_bytes))
-                    guide_text = "\n".join(p.text for p in doc_obj.paragraphs if p.text.strip())
-                st.session_state.generated_style_guide = guide_text
-                # sync sidebar selectbox
-                st.session_state.style_bytes = raw_bytes
-                st.session_state.style_guide = guide_text
-                st.session_state.preset_style = "none"
-                st.session_state.style_upload_key += 1
+            if st.button("← חזור", key="back_from_upload"):
+                st.session_state.style_mode = None
                 st.rerun()
-            except Exception as e:
-                st.error(f"שגיאה בקריאת הקובץ: {e}")
 
-        if st.button("← חזור", key="back_from_upload"):
-            st.session_state.style_mode = None
-            st.rerun()
-
-    # ── תצוגת מדריך סגנון (משותף לשני מסלולים) ──
+    # ── תצוגת מדריך סגנון (משותף לכל המסלולים) ──
     if st.session_state.generated_style_guide:
         st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
         st.markdown('<div class="section-label">📖 מדריך סגנון כתיבה</div>', unsafe_allow_html=True)
@@ -1573,6 +2006,16 @@ with tab_style:
         if edited_guide != st.session_state.generated_style_guide:
             st.session_state.generated_style_guide = edited_guide
 
+        st.markdown('<div class="section-label" style="margin-top:1rem;">📋 הוראות שימוש לסגנון</div>', unsafe_allow_html=True)
+        st.caption("כיצד המודל צריך ליישם את הסגנון — ניתן לערוך")
+        _usage_instr_val = st.text_area(
+            "", value=st.session_state.get("style_usage_instructions", ""),
+            height=150, key="style_usage_instr_editor", label_visibility="collapsed",
+            placeholder="לדוגמה: כתוב בגוף ראשון, משפטים קצרים, פתח בשאלה, הימנע מז'רגון...",
+        )
+        if _usage_instr_val != st.session_state.get("style_usage_instructions", ""):
+            st.session_state.style_usage_instructions = _usage_instr_val
+
         col_apply, col_dl_style, col_clear = st.columns(3)
         with col_apply:
             if st.button("✅ החל סגנון", key="apply_style_btn", use_container_width=True):
@@ -1580,6 +2023,7 @@ with tab_style:
                 st.session_state.style_bytes = st.session_state.generated_style_guide.encode("utf-8")
                 st.session_state.preset_style = "none"
                 st.session_state.style_upload_key += 1
+                save_user_settings()
                 st.rerun()
         with col_dl_style:
             docx_bytes = data_loader.save_style_guide_docx(st.session_state.generated_style_guide)
@@ -1592,6 +2036,7 @@ with tab_style:
         with col_clear:
             if st.button("🗑 נקה", key="clear_style_guide_btn", use_container_width=True):
                 st.session_state.generated_style_guide = ""
+                st.session_state.style_usage_instructions = ""
                 st.rerun()
 
 
@@ -1621,43 +2066,153 @@ with tab_archive:
                 st.session_state.archive = []
                 st.rerun()
 
-        for i, entry in enumerate(reversed(archive)):
-            idx = len(archive) - 1 - i
-            expander_label = f"[{entry['timestamp_str']}] {entry['category']} — {entry['idea'][:50]}"
-            with st.expander(expander_label, expanded=(i == 0)):
-                col_arc_post, col_arc_img = st.columns([1, 1], gap="large")
+        # Check if we're viewing a specific entry
+        view_idx = st.session_state.get("archive_view_idx", None)
+        if view_idx is not None and 0 <= view_idx < len(archive):
+            entry = archive[view_idx]
+            safe_cat = _safe_filename(entry["category"])
+            safe_idea = _safe_filename(entry["idea"])
+            if st.button("← חזור לגלריה", key="arc_back_btn"):
+                st.session_state.archive_view_idx = None
+                st.rerun()
+            st.markdown(f'<div style="color:rgba(255,255,255,0.5);font-size:0.8rem;margin-bottom:1rem;direction:rtl;">[{entry["timestamp_str"]}] {entry["category"]} — {entry["idea"][:80]}</div>', unsafe_allow_html=True)
+            col_arc_post, col_arc_img = st.columns([1, 1], gap="large")
+            with col_arc_post:
+                st.markdown('<div class="section-label">📝 פוסט</div>', unsafe_allow_html=True)
+                st.text_area("", value=entry["post_text"], height=400, key=f"arc_view_post_{view_idx}", label_visibility="collapsed")
+                meta = f"{entry['content_type']} · {entry['language']} · {entry['preset_style']} · {entry['marketing_framework']}"
+                st.caption(meta)
+                st.download_button("⬇ הורד טקסט", data=entry["post_text"].encode("utf-8"),
+                    file_name=f"{safe_cat}_{safe_idea}_{entry['timestamp']}.txt",
+                    mime="text/plain", use_container_width=True, key=f"arc_dl_post_view_{view_idx}")
+            with col_arc_img:
+                st.markdown('<div class="section-label">🖼 תמונה</div>', unsafe_allow_html=True)
+                if entry.get("image_bytes"):
+                    st.image(entry["image_bytes"], use_container_width=True)
+                    st.download_button("⬇ הורד תמונה", data=entry["image_bytes"],
+                        file_name=f"{safe_cat}_{safe_idea}_{entry['timestamp']}.png",
+                        mime="image/png", use_container_width=True, key=f"arc_dl_img_view_{view_idx}")
+        else:
+            # Gallery card grid — 3 columns
+            cols = st.columns(3)
+            for i, entry in enumerate(reversed(archive)):
+                real_idx = len(archive) - 1 - i
+                safe_cat = _safe_filename(entry["category"])
+                safe_idea = _safe_filename(entry["idea"])
+                preview_text = entry["post_text"][:130].replace("\n", " ")
+                with cols[i % 3]:
+                    st.markdown(f"""
+<div style="border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:1rem;
+    margin-bottom:1rem;background:rgba(255,255,255,0.03);direction:rtl;text-align:right;">
+    <div style="font-size:0.72rem;color:rgba(255,255,255,0.35);margin-bottom:0.4rem;">{entry.get('timestamp_str','')}</div>
+    <div style="font-size:0.8rem;font-weight:600;color:rgba(255,255,255,0.8);margin-bottom:0.4rem;">{entry['category']}</div>
+    <div style="font-size:0.82rem;color:rgba(255,255,255,0.6);line-height:1.5;">{preview_text}…</div>
+</div>""", unsafe_allow_html=True)
+                    c1, c2, c3 = st.columns([2, 1, 1])
+                    with c1:
+                        if st.button("👁 צפה", key=f"arc_view_{real_idx}", use_container_width=True):
+                            st.session_state.archive_view_idx = real_idx
+                            st.rerun()
+                    with c2:
+                        st.download_button("📄 טקסט", data=entry["post_text"].encode("utf-8"),
+                            file_name=f"{safe_cat}_{safe_idea}_{entry['timestamp']}.txt",
+                            mime="text/plain", use_container_width=True, key=f"arc_dl_txt_{real_idx}")
+                    with c3:
+                        if entry.get("image_bytes"):
+                            st.download_button("🖼 תמונה", data=entry["image_bytes"],
+                                file_name=f"{safe_cat}_{safe_idea}_{entry['timestamp']}.png",
+                                mime="image/png", use_container_width=True, key=f"arc_dl_img_{real_idx}")
+                        else:
+                            st.button("🖼", disabled=True, use_container_width=True, key=f"arc_no_img_{real_idx}")
 
-                with col_arc_post:
-                    st.markdown('<div class="section-label">📝 פוסט</div>', unsafe_allow_html=True)
-                    st.text_area(
-                        "",
-                        value=entry["post_text"],
-                        height=300,
-                        key=f"arc_post_{idx}",
-                        label_visibility="collapsed",
-                    )
-                    meta = f"{entry['content_type']} · {entry['language']} · {entry['preset_style']} · {entry['marketing_framework']}"
-                    st.caption(meta)
-                    safe_cat = _safe_filename(entry["category"])
-                    safe_idea = _safe_filename(entry["idea"])
-                    st.download_button(
-                        "⬇ הורד טקסט",
-                        data=entry["post_text"].encode("utf-8"),
-                        file_name=f"{safe_cat}_{safe_idea}_{entry['timestamp']}.txt",
-                        mime="text/plain",
-                        use_container_width=True,
-                        key=f"arc_dl_post_{idx}",
-                    )
 
-                with col_arc_img:
-                    st.markdown('<div class="section-label">🖼 תמונה</div>', unsafe_allow_html=True)
-                    if entry.get("image_bytes"):
-                        st.image(entry["image_bytes"], use_container_width=True)
-                        st.download_button(
-                            "⬇ הורד תמונה",
-                            data=entry["image_bytes"],
-                            file_name=f"{safe_cat}_{safe_idea}_{entry['timestamp']}.png",
-                            mime="image/png",
-                            use_container_width=True,
-                            key=f"arc_dl_img_{idx}",
-                        )
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB 6 — הוראות שימוש
+# ═══════════════════════════════════════════════════════════════════════════════
+with tab_guide:
+    st.markdown("""
+<div style="direction:rtl; text-align:right; max-width:800px; margin:0 auto;">
+
+<div style="font-size:1.6rem; font-weight:700; color:white; margin-bottom:1.5rem;">
+    📖 מדריך שימוש — מכונת התוכן
+</div>
+
+<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:1.4rem 1.8rem;margin-bottom:1.2rem;">
+    <div style="font-size:0.85rem;font-weight:800;letter-spacing:0.12em;color:white;text-transform:uppercase;margin-bottom:0.8rem;">שלב 1 — הגדרת הבסיס</div>
+    <div style="color:rgba(255,255,255,0.8);font-size:0.95rem;line-height:1.9;">
+        הגדרות המותג נמצאות בתפריט הצד, בלשוניות האקורדיון.<br>
+        מלאו את שם המותג, הדומיין והתחום המקצועי.<br><br>
+        <strong style="color:rgba(255,255,255,0.95);">מבנה תפריט הצד:</strong>
+        <ul style="margin-top:0.5rem;padding-right:1.2rem;">
+            <li><strong style="color:rgba(255,255,255,0.9);">💡 רעיונות ובחירת תוכן</strong> — הכניסו רעיון לפוסט, בחרו מהרשימה, או העלו תמונות ייחוס</li>
+            <li><strong style="color:rgba(255,255,255,0.9);">הערות מיוחדות</strong> — הוסיפו הנחיות לפוסט ולתמונה (תמיד גלויות)</li>
+            <li><strong style="color:rgba(255,255,255,0.9);">✦ צור פוסט + תמונה</strong> — כפתור הגנרציה הראשי</li>
+            <li><strong style="color:rgba(255,255,255,0.9);">סגנון כתיבה / מודל שיווקי / הגדרות פוסט</strong> — אקורדיונים נפתחים לפי צורך</li>
+        </ul>
+    </div>
+</div>
+
+<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:1.4rem 1.8rem;margin-bottom:1.2rem;">
+    <div style="font-size:0.85rem;font-weight:800;letter-spacing:0.12em;color:white;text-transform:uppercase;margin-bottom:0.8rem;">שלב 2 — סגנון כתיבה</div>
+    <div style="color:rgba(255,255,255,0.8);font-size:0.95rem;line-height:1.9;">
+        בלשונית <strong style="color:rgba(255,255,255,0.95);">סגנון כתיבה</strong> תוכלו:
+        <ul style="margin-top:0.5rem;padding-right:1.2rem;">
+            <li>לבחור סגנון מוכן מתוך 10 הסגנונות</li>
+            <li>לנתח סגנון אישי על ידי הדבקת קטעי טקסט (כפתור "הבא ←" לכל קטע, "סיום" לניתוח)</li>
+            <li>לטעון קובץ סגנון שמור (DOCX / TXT)</li>
+            <li>לשפר את הסגנון שנוצר בלחיצה על ✨ שפר את הסגנון שלי</li>
+        </ul>
+    </div>
+</div>
+
+<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:1.4rem 1.8rem;margin-bottom:1.2rem;">
+    <div style="font-size:0.85rem;font-weight:800;letter-spacing:0.12em;color:white;text-transform:uppercase;margin-bottom:0.8rem;">שלב 3 — הגדרות תמונה</div>
+    <div style="color:rgba(255,255,255,0.8);font-size:0.95rem;line-height:1.9;">
+        בלשונית <strong style="color:rgba(255,255,255,0.95);">הגדרות תמונה</strong> הגדירו:
+        <ul style="margin-top:0.5rem;padding-right:1.2rem;">
+            <li><strong style="color:rgba(255,255,255,0.9);">דמות / פנים</strong> — תמונת ייחוס לשמירת זהות (חובה לייצור תמונה)</li>
+            <li><strong style="color:rgba(255,255,255,0.9);">אובייקט / מוצר</strong> — תמונת מוצר שתשולב בתמונה</li>
+            <li><strong style="color:rgba(255,255,255,0.9);">רקע / סביבה</strong> — תמונת רקע לסגנון ויזואלי</li>
+            <li>תיאור סגנון טקסטואלי + כפתור שיפור אוטומטי</li>
+        </ul>
+    </div>
+</div>
+
+<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:1.4rem 1.8rem;margin-bottom:1.2rem;">
+    <div style="font-size:0.85rem;font-weight:800;letter-spacing:0.12em;color:white;text-transform:uppercase;margin-bottom:0.8rem;">שלב 4 — יצירת פוסט</div>
+    <div style="color:rgba(255,255,255,0.8);font-size:0.95rem;line-height:1.9;">
+        בתפריט הצד (אקורדיון 💡 רעיונות), כתבו את נושא הפוסט בשדה "רעיון לפוסט".<br>
+        הוסיפו הערות מיוחדות אם יש (טון, אורך, כיוון ספציפי).<br>
+        לחצו על <strong style="color:rgba(255,255,255,0.95);">✦ צור פוסט + תמונה</strong> — המערכת תייצר פוסט ותמונה תואמת.
+    </div>
+</div>
+
+<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:1.4rem 1.8rem;margin-bottom:1.2rem;">
+    <div style="font-size:0.85rem;font-weight:800;letter-spacing:0.12em;color:white;text-transform:uppercase;margin-bottom:0.8rem;">שלב 5 — מחולל רעיונות</div>
+    <div style="color:rgba(255,255,255,0.8);font-size:0.95rem;line-height:1.9;">
+        בלשונית <strong style="color:rgba(255,255,255,0.95);">מחולל רעיונות</strong> תוכלו לקבל השראה לנושאי פוסטים.<br>
+        הגדירו תחום, בחרו קהל יעד ולחצו "צור טבלת רעיונות".<br>
+        לחיצה על <strong style="color:rgba(255,255,255,0.95);">📥 טען לאפליקציה</strong> תעביר את הרעיונות לתפריט הצד.
+    </div>
+</div>
+
+<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:1.4rem 1.8rem;margin-bottom:1.2rem;">
+    <div style="font-size:0.85rem;font-weight:800;letter-spacing:0.12em;color:white;text-transform:uppercase;margin-bottom:0.8rem;">שלב 6 — ארכיון</div>
+    <div style="color:rgba(255,255,255,0.8);font-size:0.95rem;line-height:1.9;">
+        כל פוסט שנוצר נשמר אוטומטית בלשונית <strong style="color:rgba(255,255,255,0.95);">ארכיון</strong>.<br>
+        ניתן לצפות בכל פוסט בלחיצה על "👁 צפה" ולהוריד את הטקסט בלחיצה על "⬇ הורד".
+    </div>
+</div>
+
+<div style="background:rgba(167,139,250,0.06);border:1px solid rgba(167,139,250,0.2);border-radius:16px;padding:1.4rem 1.8rem;margin-bottom:1.2rem;">
+    <div style="font-size:0.85rem;font-weight:800;letter-spacing:0.12em;color:white;text-transform:uppercase;margin-bottom:0.8rem;">💡 טיפים</div>
+    <div style="color:rgba(255,255,255,0.8);font-size:0.95rem;line-height:2.0;">
+        • בחרו <strong style="color:rgba(255,255,255,0.95);">מודל כתיבה שיווקית</strong> (AIDA, PAS וכו') כדי להוסיף לפוסט כתיבה שיווקית ברורה יותר<br>
+        • לחצו <strong style="color:rgba(255,255,255,0.95);">💾 שמור</strong> בכל קטגוריה בתפריט — הגדרות נשמרות לביקור הבא<br>
+        • ניתן לשפר תיאור סגנון ויזואלי בלחיצה על <strong style="color:rgba(255,255,255,0.95);">✨ שפר סגנון</strong><br>
+        • הכפתור "🔄 נסה שוב" מאפשר לרענן רק את הפוסט או רק את התמונה בנפרד
+    </div>
+</div>
+
+</div>
+""", unsafe_allow_html=True)
