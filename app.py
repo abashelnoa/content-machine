@@ -1461,7 +1461,6 @@ if st.session_state.get("bulk_running") and st.session_state.get("bulk_queue"):
 
     _bpost_text   = ""
     _bimage_bytes = None
-    _stc.html(_tips_rotator_html(), height=80, scrolling=False)
     try:
         _bpost_text = generator.generate_post(
             _beff_sty, _bcat, _bidea,
@@ -1558,6 +1557,18 @@ with tab_create:
         if st.session_state.bulk_running:
             _bnext_idea = st.session_state.bulk_queue[0]["idea"][:50] if st.session_state.bulk_queue else ""
             st.progress(_bdone / _btotal, text=f"מייצר {_bdone + 1} מתוך {_btotal}: {_bnext_idea}...")
+            st.markdown("""
+<div style="direction:rtl;text-align:center;margin:0.6rem 0 0.2rem 0;
+    padding:0.8rem 1.4rem;border-radius:14px;
+    background:rgba(124,58,237,0.10);border:1px solid rgba(124,58,237,0.25);">
+  <div style="font-size:1.05rem;font-weight:700;color:rgba(255,255,255,0.95);margin-bottom:0.3rem;">
+    ⏳ אנא המתינו — יצירת מספר גדול של פוסטים לוקחת זמן
+  </div>
+  <div style="font-size:0.88rem;color:rgba(255,255,255,0.70);line-height:1.5;">
+    השאירו את החלון פתוח ונחזור אליכם בקרוב 🙏
+  </div>
+</div>""", unsafe_allow_html=True)
+            _stc.html(_tips_rotator_html(), height=80, scrolling=False)
         else:
             st.success(f"✅ הושלם! {_bdone} פוסטים ותמונות נוצרו בהצלחה")
             if st.button("🗑 נקה תוצאות", key="clear_bulk_results_btn"):
@@ -1566,15 +1577,16 @@ with tab_create:
                 st.rerun()
 
         for _ri, _res in enumerate(reversed(st.session_state.bulk_results)):
+            _aidx = len(st.session_state.bulk_results) - 1 - _ri  # stable index into bulk_results
             _blabel = f"📄 {_res['category']} — {_res['idea'][:60]}"
             with st.expander(_blabel, expanded=(_ri == 0)):
                 _rcol_p, _rcol_i = st.columns([1, 1])
                 with _rcol_p:
-                    st.text_area("", value=_res["post_text"], height=280,
-                                 key=f"bulk_post_{_ri}", label_visibility="collapsed")
+                    st.text_area("", value=_res["post_text"], height=260,
+                                 key=f"bulk_post_{_aidx}", label_visibility="collapsed")
                     st.download_button("⬇ טקסט", data=_res["post_text"].encode("utf-8"),
-                        file_name=f"bulk_post_{_ri}.txt", mime="text/plain",
-                        use_container_width=True, key=f"bulk_dl_txt_{_ri}")
+                        file_name=f"bulk_post_{_aidx}.txt", mime="text/plain",
+                        use_container_width=True, key=f"bulk_dl_txt_{_aidx}")
                     if _res.get("auto_style_explanation") and _res.get("auto_chosen_style"):
                         _bcsname = PRESET_STYLES.get(_res["auto_chosen_style"], {}).get("hebrew_name", "")
                         st.markdown(f"""
@@ -1587,12 +1599,67 @@ with tab_create:
       {_res["auto_style_explanation"]}
   </div>
 </div>""", unsafe_allow_html=True)
+                    # ── Per-item post retry ──
+                    st.markdown('<div class="section-label" style="margin-top:0.7rem;">💬 הערות לשיפור הפוסט</div>', unsafe_allow_html=True)
+                    _bpfb = st.text_area("", height=70, key=f"bulk_pfb_{_aidx}",
+                        placeholder="למשל: קצר יותר, הוסף סטטיסטיקה, שנה טון...",
+                        label_visibility="collapsed")
+                    if st.button("🔄 צור פוסט מחדש", key=f"bulk_rp_{_aidx}", use_container_width=True):
+                        _stc.html(_tips_rotator_html(), height=80, scrolling=False)
+                        with st.spinner(f"מחדש פוסט עבור: {_res['idea'][:40]}..."):
+                            try:
+                                _beff = st.session_state.generated_style_guide or (st.session_state.get("style_guide") or "")
+                                _bprst = PRESET_STYLES.get(_res.get("auto_chosen_style") or st.session_state.preset_style, {}).get("prompt_instruction", "")
+                                _bfw2 = MARKETING_FRAMEWORKS[st.session_state.marketing_framework]["structure"] if st.session_state.marketing_framework != "none" else ""
+                                _new_post = generator.generate_post(
+                                    _beff, _res["category"], _res["idea"],
+                                    language=_res.get("language", st.session_state.language),
+                                    content_type=_res.get("content_type", st.session_state.content_type),
+                                    word_count=st.session_state.word_count or None,
+                                    preset_style_instruction=_bprst,
+                                    marketing_framework=_bfw2,
+                                    retry_feedback=_bpfb,
+                                )
+                                st.session_state.bulk_results[_aidx]["post_text"] = _new_post
+                            except Exception as _pe:
+                                st.error(f"שגיאה: {_pe}")
+                        st.rerun()
+
                 with _rcol_i:
                     for _ji, _bimg in enumerate(_res.get("images") or []):
+                        if _ji > 0:
+                            st.markdown('<div style="margin-top:0.5rem; opacity:0.6; font-size:0.75rem; direction:rtl;">🖼 גרסה קודמת</div>', unsafe_allow_html=True)
                         st.image(_bimg, use_container_width=True)
                         st.download_button("⬇ תמונה", data=_bimg,
-                            file_name=f"bulk_img_{_ri}_{_ji}.png", mime="image/png",
-                            use_container_width=True, key=f"bulk_dl_img_{_ri}_{_ji}")
+                            file_name=f"bulk_img_{_aidx}_{_ji}.png", mime="image/png",
+                            use_container_width=True, key=f"bulk_dl_img_{_aidx}_{_ji}")
+                    # ── Per-item image retry ──
+                    st.markdown('<div class="section-label" style="margin-top:0.7rem;">💬 הערות לשיפור התמונה</div>', unsafe_allow_html=True)
+                    _bifb = st.text_area("", height=70, key=f"bulk_ifb_{_aidx}",
+                        placeholder="למשל: שנה רקע לטבע, הוסף תאורה דרמטית...",
+                        label_visibility="collapsed")
+                    if st.button("🔄 צור תמונה מחדש", key=f"bulk_ri_{_aidx}", use_container_width=True):
+                        _stc.html(_tips_rotator_html(), height=80, scrolling=False)
+                        with st.spinner(f"מחדש תמונה עבור: {_res['idea'][:40]}..."):
+                            try:
+                                _bi_scene = generator.generate_image_prompt(_res["post_text"])
+                                if st.session_state.image_notes:
+                                    _bi_scene = f"{_bi_scene}. Additional direction: {st.session_state.image_notes}"
+                                if _bifb:
+                                    _bi_scene = f"{_bi_scene}. User feedback: {_bifb}"
+                                _bi_style = st.session_state.get("last_image_style") or st.session_state.style_description or ""
+                                _bextra2 = [r["bytes"] for r in st.session_state.reference_images[1:] if r]
+                                _new_img = generator.generate_image(
+                                    face_source, _bi_scene,
+                                    aspect_ratio=st.session_state.aspect_ratio,
+                                    style_description=_bi_style,
+                                    add_text=st.session_state.add_text_to_image,
+                                    extra_reference_images=_bextra2 or None,
+                                )
+                                st.session_state.bulk_results[_aidx]["images"].append(_new_img)
+                            except Exception as _ie:
+                                st.error(f"שגיאה: {_ie}")
+                        st.rerun()
 
         st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 
