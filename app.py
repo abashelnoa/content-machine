@@ -21,6 +21,12 @@ from generator import ASPECT_RATIOS, CONTENT_TYPES, LANGUAGES, PRESET_STYLES, MA
 load_dotenv()
 
 
+def _get_aspect_ratio() -> str:
+    """Always derive aspect ratio from the radio widget key — never stale session state."""
+    label = st.session_state.get("ar_radio", "מרובע (1:1)")
+    return ASPECT_RATIOS.get(label, "1:1")
+
+
 # ── State persistence ─────────────────────────────────────────────────────────
 SETTINGS_FILE = Path(__file__).parent / "user_settings.json"
 SETTINGS_KEYS = [
@@ -1476,7 +1482,7 @@ if st.session_state.get("bulk_running") and st.session_state.get("bulk_queue"):
             _bscene = f"{_bscene}. Additional direction: {st.session_state.image_notes}"
         _bimage_bytes = generator.generate_image(
             face_source, _bscene,
-            aspect_ratio=st.session_state.aspect_ratio,
+            aspect_ratio=_get_aspect_ratio(),
             style_description=_bstyle,
             add_text=st.session_state.add_text_to_image,
             extra_reference_images=_bextra or None,
@@ -1651,7 +1657,7 @@ with tab_create:
                                 _bextra2 = [r["bytes"] for r in st.session_state.reference_images[1:] if r]
                                 _new_img = generator.generate_image(
                                     face_source, _bi_scene,
-                                    aspect_ratio=st.session_state.aspect_ratio,
+                                    aspect_ratio=_get_aspect_ratio(),
                                     style_description=_bi_style,
                                     add_text=st.session_state.add_text_to_image,
                                     extra_reference_images=_bextra2 or None,
@@ -1802,7 +1808,7 @@ with tab_create:
                 _extra_refs = [r["bytes"] for r in st.session_state.reference_images[1:] if r]
                 st.session_state.image_bytes = generator.generate_image(
                     face_source, scene,
-                    aspect_ratio=st.session_state.aspect_ratio,
+                    aspect_ratio=_get_aspect_ratio(),
                     style_description=_this_gen_style,
                     add_text=st.session_state.add_text_to_image,
                     text_content=image_text,
@@ -1978,7 +1984,7 @@ with tab_create:
                             st.session_state.prev_image_bytes = st.session_state.image_bytes
                             new_img = generator.generate_image(
                                 face_source, scene,
-                                aspect_ratio=st.session_state.aspect_ratio,
+                                aspect_ratio=_get_aspect_ratio(),
                                 # Always reuse the style from the original generation
                                 style_description=st.session_state.last_image_style,
                                 add_text=st.session_state.add_text_to_image,

@@ -162,17 +162,44 @@ ASPECT_RATIOS = {
     "רחב (16:9)":               "16:9",
     "לאורך (9:16)":             "9:16",
     "4:5 לאורך (Portrait)":     "4:5",
-    "4:5 לרוחב (Landscape)":    "4:5",
+    "4:5 לרוחב (Landscape)":    "5:4",
 }
 
-STYLE_WRAPPER = (
-    "Generate a professional portrait photo of this exact person. {scene}. "
+# Human-readable orientation hint for each ratio (used in prompt)
+_AR_HINT = {
+    "1:1":  "square format — equal width and height",
+    "16:9": "landscape/horizontal — significantly wider than tall",
+    "9:16": "portrait/vertical — significantly taller than wide",
+    "4:5":  "portrait/vertical — slightly taller than wide",
+    "5:4":  "landscape/horizontal — slightly wider than tall",
+}
+
+_DEFAULT_STYLE = (
     "Cinematic lighting, dark teal and electric blue color palette, "
     "futuristic AI/tech atmosphere, bokeh background with subtle digital patterns, "
-    "photorealistic, studio quality, sharp focus on face. "
-    "Keep the person's exact facial features, age, and appearance."
+    "photorealistic, studio quality, sharp focus on face."
+)
+
+# When the user specifies a style, it takes full priority — the default is dropped entirely.
+_PROMPT_WITH_STYLE = (
     "{aspect_ratio_instruction}"
-    "{style_instruction}"
+    "Generate a portrait of this exact person. {scene}. "
+    "VISUAL STYLE — apply this exactly and ignore any default style: {style_instruction} "
+    "If style reference images are provided below, match their color palette, lighting, mood, "
+    "and overall aesthetic precisely. "
+    "Preserve the person's exact facial features, age, and appearance. "
+    "Any secondary people appearing in the background or scene (other than the main subject) "
+    "should have a realistic Israeli/Middle-Eastern appearance."
+    "{text_instruction}"
+)
+
+_PROMPT_DEFAULT = (
+    "{aspect_ratio_instruction}"
+    "Generate a professional portrait photo of this exact person. {scene}. "
+    "{default_style} "
+    "Keep the person's exact facial features, age, and appearance. "
+    "Any secondary people appearing in the background or scene (other than the main subject) "
+    "should have a realistic Israeli/Middle-Eastern appearance."
     "{text_instruction}"
 )
 
@@ -246,17 +273,16 @@ def generate_image_prompt(post_text: str) -> str:
     """מייצר prompt באנגלית לתמונה."""
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
-    prompt = f"""Based on the following post, write ONE sentence describing a scene for a portrait photo.
+    prompt = f"""Based on the following post, write ONE sentence describing a scene or setting for a portrait photo.
 
 Rules:
-- Middle-aged professional person as subject
+- Describe only the subject's pose/action and background/environment — do NOT specify any color palette, lighting style, or artistic style (those are set separately)
 - Background/scene should metaphorically represent the post's theme
-- Style: cinematic, dark teal and electric blue palette, futuristic AI/tech atmosphere, photorealistic
 - Under 25 words. Return only the scene description in English, nothing else.
 
 Examples:
-- "sitting at a glowing laptop with holographic data streams floating in background"
-- "standing confidently before a large digital dashboard with flowing light patterns"
+- "sitting at a desk surrounded by open books and scattered notes"
+- "standing confidently before a large crowd in an open amphitheater"
 
 Post:
 {post_text}"""
@@ -267,6 +293,59 @@ Post:
         messages=[{"role": "user", "content": prompt}],
     )
     return message.content[0].text.strip()
+
+
+def select_best_style(category: str, idea: str) -> tuple[str, str]:
+    """
+    Picks the best preset writing style for the given category+idea.
+    Returns (style_key, explanation_hebrew).
+    """
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+
+    styles_block = "\n".join(
+        f"- Key: {key} | Style: {meta['name']} ({meta['hebrew_name']}) | {meta['description']}"
+        for key, meta in PRESET_STYLES.items()
+    )
+
+    prompt = f"""You are a professional content strategy expert.
+A content creator wants to write a post about the following:
+Category: {category}
+Idea: {idea}
+
+Here are 10 available writing styles:
+{styles_block}
+
+Task:
+1. Choose the single best style key for this specific idea.
+2. Write a short explanation in Hebrew (2-3 sentences) explaining why this style fits this idea best.
+
+Respond ONLY in this exact JSON format (no markdown, no extra text):
+{{"key": "<style_key>", "explanation": "<Hebrew explanation>"}}"""
+
+    last_exc = None
+    for attempt in range(3):
+        try:
+            response = client.messages.create(
+                model=ANTHROPIC_MODEL,
+                max_tokens=300,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            text = response.content[0].text.strip()
+            match = re.search(r'\{.*\}', text, re.DOTALL)
+            if match:
+                data = json.loads(match.group())
+                key = data.get("key", "")
+                explanation = data.get("explanation", "")
+                if key in PRESET_STYLES:
+                    return key, explanation
+            return list(PRESET_STYLES.keys())[0], ""
+        except Exception as e:
+            last_exc = e
+            if "529" in str(e) or "overload" in str(e).lower():
+                time.sleep(2 ** attempt)
+                continue
+            raise
+    raise last_exc
 
 
 def generate_text_for_image(post_text: str, language: str = "עברית") -> str:
@@ -327,36 +406,71 @@ def generate_image(face_image, scene_description: str,
     """
     client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
 
+    # Always enforce aspect ratio explicitly — even for 1:1 — so the model never guesses.
+    _ar_hint = _AR_HINT.get(aspect_ratio, "")
     aspect_ratio_instruction = (
-        f" Generate with {aspect_ratio} aspect ratio." if aspect_ratio != "1:1" else ""
+        f"CRITICAL: Output image MUST use exactly {aspect_ratio} aspect ratio "
+        f"({_ar_hint}). Do not crop, pad, or alter this ratio for any reason. "
     )
-    style_instruction = f" Additional style: {style_description}." if style_description else ""
+    print(f"[generate_image] aspect_ratio={aspect_ratio!r}  hint={_ar_hint!r}")
+
     text_instruction = (
         f" Incorporate this text creatively into the image design: '{text_content}'."
         if add_text and text_content else ""
     )
 
-    image_prompt = STYLE_WRAPPER.format(
-        scene=scene_description,
-        aspect_ratio_instruction=aspect_ratio_instruction,
-        style_instruction=style_instruction,
-        text_instruction=text_instruction,
+    has_style = bool(style_description.strip()) or bool(
+        extra_reference_images and any(extra_reference_images)
     )
+
+    # Collect valid extra reference images first (needed to build has_style)
+    valid_refs = []
+    if extra_reference_images:
+        for img_bytes in extra_reference_images:
+            if img_bytes:
+                try:
+                    valid_refs.append(Image.open(io.BytesIO(img_bytes)))
+                except Exception:
+                    pass
+
+    has_style = bool(style_description.strip()) or bool(valid_refs)
+
+    # Build ref-inclusion clause for the prompt
+    ref_clause = (
+        " All additional reference images provided must appear as visual elements in the generated image."
+        if valid_refs else ""
+    )
+
+    if has_style:
+        style_str = style_description.strip() if style_description.strip() else "match the visual style of the reference images"
+        image_prompt = _PROMPT_WITH_STYLE.format(
+            scene=scene_description,
+            style_instruction=style_str + ref_clause,
+            aspect_ratio_instruction=aspect_ratio_instruction,
+            text_instruction=text_instruction,
+        )
+    else:
+        image_prompt = _PROMPT_DEFAULT.format(
+            scene=scene_description,
+            default_style=_DEFAULT_STYLE,
+            aspect_ratio_instruction=aspect_ratio_instruction,
+            text_instruction=text_instruction,
+        )
 
     if isinstance(face_image, bytes):
         face_img = Image.open(io.BytesIO(face_image))
     else:
         face_img = Image.open(face_image)
 
-    contents = [image_prompt, face_img]
-    if extra_reference_images:
-        for img_bytes in extra_reference_images[:2]:
-            if img_bytes:
-                try:
-                    extra_img = Image.open(io.BytesIO(img_bytes))
-                    contents.append(extra_img)
-                except Exception:
-                    pass
+    # Build contents with explicit labels so the model knows each image's role
+    contents = [image_prompt, "Subject — preserve this person's exact face and identity:", face_img]
+
+    if valid_refs:
+        contents.append(
+            "Reference images — incorporate ALL of these as visual elements in the generated image "
+            "(objects, people, props, environments, and/or visual style shown here):"
+        )
+        contents.extend(valid_refs)
 
     response = client.models.generate_content(
         model=IMAGEN_MODEL,
@@ -469,6 +583,7 @@ def enhance_style_description(raw_description: str) -> str:
     """
     מקבל תיאור סגנון ויזואלי בכתיבה חופשית ומחזיר גרסה משופרת,
     מנוסחת כהנחיה מקצועית לייצור תמונה (image generation prompt style).
+    Retries up to 3 times on overload (529) errors with exponential backoff.
     """
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
@@ -487,12 +602,22 @@ Rules:
 - Output ONLY the enhanced description, no explanations or headers
 - Length: 3-5 sentences, dense with visual detail"""
 
-    response = client.messages.create(
-        model=ANTHROPIC_MODEL,
-        max_tokens=400,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return response.content[0].text.strip()
+    last_exc = None
+    for attempt in range(3):
+        try:
+            response = client.messages.create(
+                model=ANTHROPIC_MODEL,
+                max_tokens=400,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return response.content[0].text.strip()
+        except Exception as e:
+            last_exc = e
+            if "529" in str(e) or "overload" in str(e).lower():
+                time.sleep(2 ** attempt)  # 1s, 2s, 4s
+                continue
+            raise
+    raise last_exc
 
 
 def generate_target_audiences(domain: str, language: str = "עברית") -> list[str]:
