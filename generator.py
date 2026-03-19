@@ -191,8 +191,10 @@ _PROMPT_WITH_STYLE = (
     "If style reference images are provided below, match their color palette, lighting, mood, "
     "and overall aesthetic precisely. "
     "Preserve the person's exact facial features, age, and appearance. "
-    "Any secondary people appearing in the background or scene (other than the main subject) "
-    "should have a realistic Israeli/Middle-Eastern appearance."
+    "If any additional people (other than the main subject) appear in the scene, "
+    "they should look like real people from contemporary Israeli society — "
+    "natural, diverse, and modern, with everyday Israeli style and energy. "
+    "Avoid generic international stock-photo looks or exaggerated cultural clichés."
     "{text_instruction}"
 )
 
@@ -201,8 +203,10 @@ _PROMPT_DEFAULT = (
     "Generate a professional portrait photo of this exact person. {scene}. "
     "{default_style} "
     "Keep the person's exact facial features, age, and appearance. "
-    "Any secondary people appearing in the background or scene (other than the main subject) "
-    "should have a realistic Israeli/Middle-Eastern appearance."
+    "If any additional people (other than the main subject) appear in the scene, "
+    "they should look like real people from contemporary Israeli society — "
+    "natural, diverse, and modern, with everyday Israeli style and energy. "
+    "Avoid generic international stock-photo looks or exaggerated cultural clichés."
     "{text_instruction}"
 )
 
