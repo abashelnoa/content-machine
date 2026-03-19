@@ -50,6 +50,114 @@ def save_user_settings():
         pass
 
 
+# ── Rotating tips shown under the progress bar during generation ──────────────
+GENERATION_TIPS = [
+    "פוסטים שמתחילים בשאלה מייצרים ב-25% יותר מעורבות.",
+    "אנשים קונים מאנשים. שלבו סיפור אישי בתוך התוכן השיווקי.",
+    "הקורא הממוצע מקדיש רק 1.7 שניות לפוסט לפני שהוא ממשיך לגלול. הכותרת היא הכל!",
+    "חוק ה-80/20 בשיווק: 80% תוכן שנותן ערך ורק 20% תוכן מכירתי ישיר.",
+    "שימוש במספרים בכותרת (למשל: \"5 טיפים ל...\") מעלה את אחוזי ההקלקה ב-36%.",
+    "סיימו כל פוסט בהנעה לפעולה (CTA) ברורה. אל תתנו לקורא לנחש מה לעשות הלאה.",
+    "יום שלישי ורביעי נחשבים לימים עם המעורבות הגבוהה ביותר ברשתות החברתיות.",
+    "דברו על ה\"תועלת\" של הלקוח, לא על ה\"תכונות\" של המוצר שלכם.",
+    "שימוש באימוג'י בפוסט יכול להעלות את המעורבות ב-33%.",
+    "קהל היעד שלכם עמוס. כתבו משפטים קצרים ומרווחים לקריאה נוחה בנייד.",
+    "רוצים פוסט שמוכר? בחרו במודל AIDA — הוא בנוי להעביר את הלקוח מסקרנות לרכישה.",
+    "מרגישים שהטקסט לא \"אתם\"? העלו קובץ פוסטים קודמים בטאב \"סגנון כתיבה\" והמערכת תנתח את הקול שלכם.",
+    "האתר מציע סגנונות כתיבה רבים. קראו את תיאור הסגנון לפני הבחירה.",
+    "מודל ה-PAS (בעיה-הקצנה-פתרון) נחשב לאחד הכלים החזקים ביותר לשיווק.",
+    "יש לכם כבר ניתוח סגנון מוכן? העלו אותו ישירות בטאב הסגנונות כדי לחסוך זמן.",
+    "לחצו על \"הסבר על מודלים\" בסטודיו כדי להבין איזה מודל מתאים למטרה שלכם.",
+    "השתמשו בסגנון \"המסביר הפשוט\" כדי להפוך מושגים מורכבים לתוכן שכל אחד מבין.",
+    "כתיבה בגובה העיניים (סגנון \"חברי\") מייצרת בדרך כלל יותר תגובות מאשר כתיבה רשמית.",
+    "אתם לא חייבים לייצר רעיונות כל פעם. העלו טבלת אקסל עם רעיונות משלכם ישירות לפאנל הימני.",
+    "רוצים פוסט ארוך ומעמיק? הגדירו את כמות המילים ל-500+ ובחרו באפשרות \"מאמר/בלוג\" בסטודיו.",
+    "העלו מספר תמונות בטאב \"סגנון התמונה\" כדי שהמערכת תלמד את השפה הויזואלית שלכם.",
+    "תמונות עם פנים אנושיות מקבלות 38% יותר לייקים מתמונות ללא דמות.",
+    "רוצים תמונה מקצועית יותר? סמנו את אפשרות Prompt Enhance והמערכת תשדרג את תיאור התמונה.",
+    "צריכים פוסט ללינקדאין? אל תשכחו לשנות את יחס הגובה-רוחב בסטודיו לפני היצירה.",
+    "טקסט קצר וקולע על התמונה עוצר את הגלילה. סמנו \"טקסט על תמונה\" בסטודיו.",
+    "כדי שהדמות בתמונה תמיד תהיה אתם, ודאו שהעליתם תמונת ייחוס ברורה.",
+    "רוצים אווירה ספציפית? תארו במילים \"תאורה חמה\" או \"משרד מודרני\" בטאב סגנון התמונה.",
+    "צבעים כחולים משדרים אמינות, בעוד כתום משדר אנרגיה וחיוניות.",
+    "אם יש לכם טקסט ספציפי שחשוב לכם שיופיע על התמונה, רשמו אותו ב\"הערות לתמונה\" בסטודיו.",
+    "התמונה נוצרת באופן אוטומטי כך שתתאים בדיוק לתוכן הפוסט שנוצר עבורכם.",
+    "תקועים בלי רעיון? מחולל הרעיונות מייצר לכם 30 זוויות שונות בלחיצה אחת.",
+    "כתיבה על \"חששות של לקוחות\" בונה אמון ומקצרת את תהליך המכירה.",
+    "לחצו על \"כתוב עוד רעיונות\" כדי לייצר בנק תכנים לחודש שלם קדימה בתוך דקות.",
+    "תוכן שמעניק \"ידע שהלקוח לא ידע\" הופך אתכם לאוטוריטה בתחומכם.",
+    "בחרו קהל יעד ספציפי מאוד במחולל הרעיונות — ככל שהקהל ממוקד יותר, הפוסט ימיר טוב יותר.",
+    "נסו להגדיר קהל יעד חדש לגמרי במחולל הרעיונות וראו אילו זוויות חדשות תקבלו.",
+    "לא מוצאים פוסט ישן? בדקו בטאב הארכיון — הכל נשמר שם באופן אוטומטי.",
+    "אתם יכולים לייצר פוסט בכמה שפות. פשוט שנו את השפה בסטודיו וצרו גרסה חדשה.",
+    "רוצים לשנות רק את התמונה? לחצו על \"צור תמונה\" בלבד מבלי לייצר מחדש את הטקסט.",
+    "המערכת תומכת גם ביצירת מאמרים ארוכים. שנו את כמות המילים הרצויה ל-800+.",
+    "אתם יכולים לכתוב רעיון לתוכן בטקסט חופשי בפאנל הימני מבלי להשתמש במחולל הרעיונות.",
+    "סגנון ה-Storytelling מעלה את זמן השהייה של הקוראים בפוסט שלכם.",
+    "השתמשו בתיבת ה\"הערות המיוחדות\" בסטודיו כדי לבקש מה-AI לשלב האשטאגים או בדיחה.",
+    "כתיבה בפורמט של רשימה (Bullet points) הופכת את הפוסט להרבה יותר קריא.",
+    "תמיד כדאי לעבור על הטקסט הסופי ולהוסיף לו נגיעה אישית אחרונה לפני הפרסום.",
+    "נסו לתאר סגנון של סרט מוכר בתיאור סגנון התמונה כדי לקבל תוצאה ויזואלית מעניינת.",
+    "פוסטים שכוללים נתון סטטיסטי נתפסים כאמינים יותר ב-75%.",
+    "בצעו A/B Testing — צרו שני פוסטים על אותו רעיון עם סגנונות כתיבה שונים ותראו מה עובד.",
+    "שילוב נכון בין סגנון הכתיבה למודל השיווקי הוא הסוד ליצירת תוכן שגם נשמע טוב וגם מוכר.",
+    "בחרו \"סגנון אוטומטי\" כדי שהמערכת תבחר עבורכם את סגנון הכתיבה המתאים ביותר לרעיון.",
+]
+
+
+def _tips_rotator_html() -> str:
+    """Returns a self-contained HTML/JS component that rotates tips every 5 s."""
+    import json as _json
+    tips_js = _json.dumps(GENERATION_TIPS, ensure_ascii=False)
+    return f"""
+<div id="tips-wrap" style="
+    direction:rtl;
+    text-align:center;
+    margin-top:0.6rem;
+    min-height:56px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+">
+  <div id="tip-box" style="
+    display:inline-block;
+    max-width:640px;
+    padding:0.55rem 1.1rem;
+    border-radius:12px;
+    background:rgba(124,58,237,0.10);
+    border:1px solid rgba(124,58,237,0.22);
+    font-size:0.88rem;
+    line-height:1.55;
+    color:rgba(255,255,255,0.88);
+    transition: opacity 0.4s ease;
+    opacity:1;
+  "></div>
+</div>
+<script>
+(function(){{
+  var tips = {tips_js};
+  // Shuffle Fisher-Yates
+  for(var i=tips.length-1;i>0;i--){{
+    var j=Math.floor(Math.random()*(i+1));
+    var tmp=tips[i]; tips[i]=tips[j]; tips[j]=tmp;
+  }}
+  var idx=0;
+  var box=document.getElementById('tip-box');
+  function showTip(){{
+    box.style.opacity='0';
+    setTimeout(function(){{
+      box.innerHTML='💡 '+tips[idx];
+      box.style.opacity='1';
+      idx=(idx+1)%tips.length;
+    }},400);
+  }}
+  showTip();
+  setInterval(showTip,5000);
+}})();
+</script>
+"""
+
+
 @st.cache_data
 def _get_font_b64() -> str:
     font_path = Path(__file__).parent / "font" / "Assistant-VariableFont_wght.ttf"
@@ -142,6 +250,15 @@ button[kind="header"],
     line-height: 1.6; direction: rtl; text-align: right;
     min-height: 300px; white-space: pre-wrap;
     font-family: 'Assistant', sans-serif;
+}
+/* Generate button — larger and bolder */
+#generate_post_btn,
+button[data-testid="generate_post_btn"] {
+    font-size: 1.15rem !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.02em !important;
+    padding: 0.9rem 1rem !important;
+    min-height: 54px !important;
 }
 .stButton > button {
     background: linear-gradient(135deg, #7c3aed, #3b82f6) !important;
@@ -424,6 +541,83 @@ label, .stSelectbox label, .stTextArea label, .stFileUploader label,
 /* dataframe */
 [data-testid="stDataFrame"] { color: white !important; }
 .dvn-scroller { color: white !important; }
+
+/* ── Dialog / Modal overrides ──────────────────────────────────────────────── */
+/* Base: dark text on white background, full RTL */
+[data-testid="stDialog"] { direction: rtl !important; }
+[data-testid="stDialog"] * {
+    color: #111111 !important;
+    -webkit-text-fill-color: #111111 !important;
+}
+/* Buttons: white text */
+[data-testid="stDialog"] button,
+[data-testid="stDialog"] button * {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
+/* All text blocks right-aligned */
+[data-testid="stDialog"] p,
+[data-testid="stDialog"] div,
+[data-testid="stDialog"] span:not(input) {
+    text-align: right !important;
+    direction: rtl !important;
+}
+/* Category headers — bigger, bolder, more prominent */
+[data-testid="stDialog"] strong {
+    display: block !important;
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+    color: #1a1040 !important;
+    -webkit-text-fill-color: #1a1040 !important;
+    border-bottom: 1px solid rgba(124,58,237,0.18) !important;
+    padding-bottom: 0.15rem !important;
+    margin-top: 0.7rem !important;
+    margin-bottom: 0.05rem !important;
+}
+/* Compact checkbox rows */
+[data-testid="stDialog"] [data-testid="stCheckbox"] {
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: unset !important;
+}
+/* Checkbox label: RTL row — text on left, box on RIGHT */
+[data-testid="stDialog"] [data-testid="stCheckbox"] label {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 0.45rem !important;
+    direction: rtl !important;
+    width: 100% !important;
+    padding: 0.12rem 0 !important;
+    margin: 0 !important;
+    cursor: pointer !important;
+    font-size: 0.87rem !important;
+    font-weight: 400 !important;
+    line-height: 1.25 !important;
+    color: #222222 !important;
+    -webkit-text-fill-color: #222222 !important;
+}
+/* The span holding the idea text — takes remaining space, right-aligned */
+[data-testid="stDialog"] [data-testid="stCheckbox"] label span {
+    flex: 1 !important;
+    text-align: right !important;
+    direction: rtl !important;
+    color: #222222 !important;
+    -webkit-text-fill-color: #222222 !important;
+}
+/* Checkbox input — appears on far RIGHT (first in RTL flex) */
+[data-testid="stDialog"] [data-testid="stCheckbox"] input[type="checkbox"] {
+    order: 1 !important;
+    flex-shrink: 0 !important;
+    width: 16px !important;
+    height: 16px !important;
+    accent-color: #7c3aed !important;
+    margin: 0 !important;
+    cursor: pointer !important;
+}
+/* Reduce gap between paragraphs */
+[data-testid="stDialog"] p { margin-bottom: 0.25rem !important; }
 .custom-divider {
     height: 1px;
     background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
@@ -591,6 +785,21 @@ ul[data-baseweb="menu"] li:hover,
 }
 
 
+/* Reset-all button — muted red tint to signal destructive action */
+#reset_all_btn {
+    background: linear-gradient(135deg, rgba(185,28,28,0.7), rgba(220,38,38,0.5)) !important;
+    border: 1px solid rgba(239,68,68,0.4) !important;
+    color: rgba(255,255,255,0.9) !important;
+    font-size: 0.88rem !important;
+    font-weight: 600 !important;
+    opacity: 0.85 !important;
+}
+#reset_all_btn:hover {
+    background: linear-gradient(135deg, rgba(185,28,28,0.9), rgba(220,38,38,0.75)) !important;
+    opacity: 1 !important;
+    transform: none !important;
+}
+
 /* Uniform button/download-button height in columns (archive cards etc.) */
 div[data-testid="column"] .stButton > button,
 div[data-testid="column"] .stDownloadButton > button {
@@ -742,20 +951,21 @@ _stc.html("""
     applyDropdownStyles(pdoc);
     applyTooltipStyles(pdoc);
 
-    /* ── 2. Tab navigation trigger — click Ideas tab when hidden div appears ── */
-    function checkNavTrigger() {
-        if (pdoc.getElementById('liraz-nav-to-ideas')) {
-            var tabs = pdoc.querySelectorAll('button[role="tab"]');
-            for (var i = 0; i < tabs.length; i++) {
-                if (tabs[i].innerText.includes('מחולל רעיונות')) {
-                    /* Only click if not already the active tab — prevents flicker */
-                    if (tabs[i].getAttribute('aria-selected') !== 'true') {
-                        tabs[i].click();
-                    }
-                    break;
+    /* ── 2. Tab navigation triggers ── */
+    function _clickTab(textFragment) {
+        var tabs = pdoc.querySelectorAll('button[role="tab"]');
+        for (var i = 0; i < tabs.length; i++) {
+            if (tabs[i].innerText.includes(textFragment)) {
+                if (tabs[i].getAttribute('aria-selected') !== 'true') {
+                    tabs[i].click();
                 }
+                break;
             }
         }
+    }
+    function checkNavTrigger() {
+        if (pdoc.getElementById('liraz-nav-to-ideas'))  { _clickTab('מחולל רעיונות'); }
+        if (pdoc.getElementById('liraz-nav-to-create'))  { _clickTab('יצירה'); }
     }
 
     /* ── 3. Hide Material Icon spans in expander summaries ── */
@@ -799,7 +1009,9 @@ def init_state():
         "ideas_table_idx": 0,
         "generated_style_guide": "",
         "style_upload_key": 0,
-        "preset_style": "none",
+        "preset_style": "auto",
+        "style_choice_explanation": "",
+        "auto_chosen_style": "",
         "marketing_framework": "none",
         "post_notes": "",
         "image_notes": "",
@@ -819,7 +1031,17 @@ def init_state():
         "style_text_buffer": [],
         "pasted_sample_key": 0,
         "retry_feedback": "",
+        "image_retry_feedback": "",
+        "last_image_style": "",
+        "prev_image_bytes": None,
+        "_jump_to_create": False,
+        "current_archive_idx": None,
         "style_usage_instructions": "",
+        "selected_ideas": [],
+        "bulk_queue": [],
+        "bulk_total": 0,
+        "bulk_running": False,
+        "bulk_results": [],
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -829,6 +1051,47 @@ def init_state():
         st.session_state.settings_loaded = True
 
 init_state()
+
+
+@st.dialog("✅ בחירת רעיונות", width="large")
+def _show_ideas_modal(post_ideas: dict):
+    st.markdown("סמן את הרעיונות שברצונך לייצר עבורם פוסטים ותמונות:")
+    col_a, col_d, _ = st.columns([1, 1, 4])
+    with col_a:
+        if st.button("בחר הכל", key="modal_sel_all"):
+            for _mcat, _mideas in post_ideas.items():
+                for _mj in range(len(_mideas)):
+                    st.session_state[f"_mcb_{_mcat}_{_mj}"] = True
+            st.rerun()
+    with col_d:
+        if st.button("בטל הכל", key="modal_desel_all"):
+            for _mcat, _mideas in post_ideas.items():
+                for _mj in range(len(_mideas)):
+                    st.session_state[f"_mcb_{_mcat}_{_mj}"] = False
+            st.rerun()
+
+    _existing_sel = {(d["category"], d["idea"]) for d in st.session_state.selected_ideas}
+    for _mcat, _mideas in post_ideas.items():
+        st.markdown(f"**{_mcat}**")
+        for _mj, _mtext in enumerate(_mideas):
+            _mkey = f"_mcb_{_mcat}_{_mj}"
+            st.checkbox(_mtext, value=(_mcat, _mtext) in _existing_sel, key=_mkey)
+
+    st.markdown("---")
+    col_ok, col_cancel = st.columns([1, 1])
+    with col_ok:
+        if st.button("✅ אישור", key="modal_confirm", use_container_width=True):
+            _result = []
+            for _mcat, _mideas in post_ideas.items():
+                for _mj, _mtext in enumerate(_mideas):
+                    if st.session_state.get(f"_mcb_{_mcat}_{_mj}", False):
+                        _result.append({"category": _mcat, "idea": _mtext})
+            st.session_state.selected_ideas = _result
+            st.rerun()
+    with col_cancel:
+        if st.button("ביטול", key="modal_cancel", use_container_width=True):
+            st.rerun()
+
 
 # Callback used by Ideas-tab widgets (checkboxes, etc.) to signal "stay on Ideas tab"
 def _ideas_tab_action():
@@ -892,17 +1155,38 @@ with st.sidebar:
 
         post_ideas = st.session_state.post_ideas
         if post_ideas:
-            category = st.selectbox(
-                "קטגוריה", options=list(post_ideas.keys()), label_visibility="collapsed"
-            )
-            ideas_list = post_ideas.get(category, [])
-            idea = st.selectbox("רעיון מהרשימה", options=ideas_list, label_visibility="collapsed")
+            def _clear_custom_idea():
+                # Clear both the logical key and the widget key so the text input visually resets
+                st.session_state.custom_content = ""
+                st.session_state["sb_custom_content"] = ""
+
+            # When a selection is active, filter dropdowns to only selected ideas
+            if st.session_state.selected_ideas:
+                _active_cats = list(dict.fromkeys(d["category"] for d in st.session_state.selected_ideas))
+                category = st.selectbox(
+                    "קטגוריה", options=_active_cats, label_visibility="collapsed",
+                    on_change=_clear_custom_idea,
+                )
+                _active_ideas = [d["idea"] for d in st.session_state.selected_ideas
+                                 if d["category"] == category]
+                idea = st.selectbox("רעיון מהרשימה", options=_active_ideas,
+                                    label_visibility="collapsed", on_change=_clear_custom_idea)
+            else:
+                category = st.selectbox(
+                    "קטגוריה", options=list(post_ideas.keys()), label_visibility="collapsed",
+                    on_change=_clear_custom_idea,
+                )
+                ideas_list = post_ideas.get(category, [])
+                idea = st.selectbox("רעיון מהרשימה", options=ideas_list, label_visibility="collapsed",
+                                    on_change=_clear_custom_idea)
+
             if st.button("🗑 איפוס רעיונות", use_container_width=True, key="reset_ideas_btn"):
                 st.session_state.post_ideas = None
                 st.session_state.ideas_bytes = None
                 st.session_state.ideas_table = {}
                 st.session_state.ideas_tables_history = []
                 st.session_state.ideas_table_idx = 0
+                st.session_state.selected_ideas = []
                 st.rerun()
         else:
             st.caption("טען רעיונות ממחולל הרעיונות או מקובץ")
@@ -918,7 +1202,21 @@ with st.sidebar:
                 st.session_state.ideas_bytes = new_bytes
                 _suffix = uploaded_ideas.name.rsplit(".", 1)[-1].lower()
                 st.session_state.post_ideas = data_loader.load_post_ideas(new_bytes, suffix=_suffix)
+                st.session_state.selected_ideas = []  # clear selection when new file loaded
                 st.rerun()
+
+        # ── Idea selection button ──
+        if post_ideas:
+            _n_sel = len(st.session_state.selected_ideas)
+            _sel_label = f"✅ בחר רעיונות ({_n_sel} נבחרו)" if _n_sel else "✅ בחר רעיונות"
+            _scol1, _scol2 = st.columns([4, 1])
+            with _scol1:
+                if st.button(_sel_label, key="open_ideas_modal_btn", use_container_width=True):
+                    _show_ideas_modal(post_ideas)
+            with _scol2:
+                if _n_sel and st.button("✖", key="clear_idea_sel_btn", use_container_width=True):
+                    st.session_state.selected_ideas = []
+                    st.rerun()
 
     # ── 2. Special Notes (always visible) ──
     post_notes_val = st.text_area(
@@ -944,7 +1242,31 @@ with st.sidebar:
         "✦ צור פוסט + תמונה",
         use_container_width=True,
         disabled=st.session_state.get("generating", False),
+        key="generate_post_btn",
     )
+    if generate_btn:
+        st.session_state["_jump_to_create"] = True
+
+    # ── Bulk generation button ──
+    _bulk_source = st.session_state.selected_ideas or [
+        {"category": _bc, "idea": _bi}
+        for _bc, _bil in (post_ideas or {}).items()
+        for _bi in _bil
+    ]
+    if _bulk_source and face_source:
+        bulk_btn = st.button(
+            f"🚀 צור הכל ({len(_bulk_source)} רעיונות)",
+            use_container_width=True,
+            key="bulk_generate_btn",
+            disabled=bool(st.session_state.get("generating") or st.session_state.get("bulk_running")),
+        )
+        if bulk_btn:
+            st.session_state.bulk_queue = _bulk_source.copy()
+            st.session_state.bulk_total = len(_bulk_source)
+            st.session_state.bulk_results = []
+            st.session_state.bulk_running = True
+            st.session_state["_jump_to_create"] = True
+            st.rerun()
 
     st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 
@@ -964,9 +1286,9 @@ with st.sidebar:
 
     # ── אקורדיון: סגנון כתיבה ──
     with st.expander("✍️ סגנון כתיבה", expanded=False):
-        style_options = ["none"] + list(PRESET_STYLES.keys())
+        style_options = ["auto", "none"] + list(PRESET_STYLES.keys())
         _none_label = "סגנון מותאם (DOCX)" if st.session_state.style_bytes else "ללא (מהמחולל)"
-        style_display = [_none_label] + [PRESET_STYLES[k]["hebrew_name"] for k in PRESET_STYLES]
+        style_display = ["🤖 בחירת המערכת"] + [_none_label] + [PRESET_STYLES[k]["hebrew_name"] for k in PRESET_STYLES]
         cur_style_idx = style_options.index(st.session_state.preset_style) if st.session_state.preset_style in style_options else 0
         selected_style_idx = st.selectbox(
             "סגנון כתיבה",
@@ -976,7 +1298,9 @@ with st.sidebar:
             label_visibility="collapsed",
         )
         st.session_state.preset_style = style_options[selected_style_idx]
-        if st.session_state.preset_style != "none":
+        if st.session_state.preset_style == "auto":
+            st.caption("המערכת תבחר את סגנון הכתיבה המתאים ביותר לרעיון שלך באופן אוטומטי")
+        elif st.session_state.preset_style != "none":
             st.caption(PRESET_STYLES[st.session_state.preset_style]["description"])
 
         uploaded_style = st.file_uploader("העלה סגנון כתיבה (DOCX / PDF)", type=["docx", "pdf"], key=f"style_upload_{st.session_state.style_upload_key}")
@@ -990,13 +1314,13 @@ with st.sidebar:
                 st.rerun()
 
         _style_active = (
-            st.session_state.preset_style != "none"
+            st.session_state.preset_style not in ("none", "auto")
             or st.session_state.style_bytes
             or st.session_state.generated_style_guide
         )
         if _style_active:
             if st.button("🗑 איפוס סגנון כתיבה", use_container_width=True, key="reset_style_sidebar"):
-                st.session_state.preset_style = "none"
+                st.session_state.preset_style = "auto"
                 st.session_state.style_bytes = None
                 st.session_state.style_guide = None
                 st.session_state.generated_style_guide = ""
@@ -1087,15 +1411,110 @@ with st.sidebar:
             save_user_settings()
             st.success("✓ נשמר")
 
+    # ── Reset all settings ──
+    st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
+    if st.button("🔄 איפוס כל ההגדרות", use_container_width=True, key="reset_all_btn"):
+        preserve = {"_jump_to_ideas", "_jump_to_create", "_ideas_rerun_trigger",
+                    "settings_loaded"}
+        for k in list(st.session_state.keys()):
+            if k not in preserve:
+                del st.session_state[k]
+        st.rerun()
 
 
-# ── Tab navigation: sidebar button OR Ideas-tab interaction ───────────────────
-# Emit the hidden trigger div at the TOP of the script (before any tab content renders)
-# so the MutationObserver switches to Ideas tab before Streamlit can flash another tab.
+# ── Tab navigation: sidebar buttons OR tab-specific interactions ──────────────
 if st.session_state.get("_jump_to_ideas") or st.session_state.get("_ideas_rerun_trigger"):
     st.session_state["_jump_to_ideas"] = False
     st.session_state["_ideas_rerun_trigger"] = False
     st.markdown('<div id="liraz-nav-to-ideas" style="display:none"></div>', unsafe_allow_html=True)
+
+if st.session_state.get("_jump_to_create"):
+    st.session_state["_jump_to_create"] = False
+    st.markdown('<div id="liraz-nav-to-create" style="display:none"></div>', unsafe_allow_html=True)
+
+# ── Bulk generation engine — processes one item per rerun ─────────────────────
+if st.session_state.get("bulk_running") and st.session_state.get("bulk_queue"):
+    _bitem = st.session_state.bulk_queue[0]
+    _bcat  = _bitem["category"]
+    _bidea = _bitem["idea"]
+
+    _bstyle   = st.session_state.style_description.strip() or st.session_state.get("free_style_text", "").strip()
+    _beff_sty = st.session_state.generated_style_guide or (st.session_state.style_guide or "")
+    _bauto_key  = ""
+    _bauto_expl = ""
+    if st.session_state.preset_style == "auto":
+        _bauto_key, _bauto_expl = generator.select_best_style(_bcat, _bidea)
+        _bpreset = PRESET_STYLES[_bauto_key]["prompt_instruction"]
+    elif st.session_state.preset_style != "none":
+        _bpreset = PRESET_STYLES[st.session_state.preset_style]["prompt_instruction"]
+    else:
+        _bpreset = ""
+    _bfw      = MARKETING_FRAMEWORKS[st.session_state.marketing_framework]["structure"] \
+                if st.session_state.marketing_framework != "none" else ""
+    _bnotes   = "\n".join(filter(None, [
+        st.session_state.post_notes,
+        f"הוראות ליישום הסגנון:\n{st.session_state.style_usage_instructions}"
+        if st.session_state.style_usage_instructions else ""
+    ]))
+    _bextra   = [r["bytes"] for r in st.session_state.reference_images[1:] if r]
+    _bwc      = st.session_state.word_count if st.session_state.word_count > 0 else None
+
+    _bpost_text   = ""
+    _bimage_bytes = None
+    _stc.html(_tips_rotator_html(), height=80, scrolling=False)
+    try:
+        _bpost_text = generator.generate_post(
+            _beff_sty, _bcat, _bidea,
+            language=st.session_state.language,
+            content_type=st.session_state.content_type,
+            word_count=_bwc,
+            preset_style_instruction=_bpreset,
+            marketing_framework=_bfw,
+            post_notes=_bnotes,
+        )
+        _bscene = generator.generate_image_prompt(_bpost_text)
+        if st.session_state.image_notes:
+            _bscene = f"{_bscene}. Additional direction: {st.session_state.image_notes}"
+        _bimage_bytes = generator.generate_image(
+            face_source, _bscene,
+            aspect_ratio=st.session_state.aspect_ratio,
+            style_description=_bstyle,
+            add_text=st.session_state.add_text_to_image,
+            extra_reference_images=_bextra or None,
+        )
+    except Exception as _berr:
+        st.warning(f"שגיאה ב-\"{_bidea[:40]}\": {_berr}")
+
+    st.session_state.post_text   = _bpost_text
+    st.session_state.image_bytes = _bimage_bytes
+
+    _bentry = {
+        "post_text": _bpost_text,
+        "images": [_bimage_bytes] if _bimage_bytes else [],
+        "category": _bcat, "idea": _bidea,
+        "content_type": st.session_state.content_type,
+        "language": st.session_state.language,
+        "preset_style": PRESET_STYLES[st.session_state.preset_style]["hebrew_name"]
+                        if st.session_state.preset_style not in ("none", "auto")
+                        else (PRESET_STYLES[_bauto_key]["hebrew_name"] if _bauto_key else "ללא"),
+        "marketing_framework": st.session_state.marketing_framework,
+        "timestamp": int(time.time()),
+        "timestamp_str": time.strftime("%d/%m/%Y %H:%M"),
+        "auto_chosen_style": _bauto_key,
+        "auto_style_explanation": _bauto_expl,
+    }
+    st.session_state.archive.append(_bentry)
+    st.session_state.current_archive_idx = len(st.session_state.archive) - 1
+    st.session_state.bulk_results.append(_bentry)
+    if len(st.session_state.archive) > 50:
+        st.session_state.archive = st.session_state.archive[-50:]
+
+    st.session_state.bulk_queue = st.session_state.bulk_queue[1:]
+    st.session_state["_jump_to_create"] = True
+    st.rerun()
+
+elif st.session_state.get("bulk_running") and not st.session_state.get("bulk_queue"):
+    st.session_state.bulk_running = False
 
 # ── HEADER ────────────────────────────────────────────────────────────────────
 _img_b64 = _get_header_image_b64()
@@ -1132,6 +1551,51 @@ tab_create, tab_ideas, tab_style, tab_visual, tab_archive, tab_guide = st.tabs([
 # TAB 1 — יצירה
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab_create:
+    # ── Bulk generation results ────────────────────────────────────────────────
+    if st.session_state.get("bulk_running") or st.session_state.get("bulk_results"):
+        _bdone  = len(st.session_state.bulk_results)
+        _btotal = st.session_state.bulk_total or 1
+        if st.session_state.bulk_running:
+            _bnext_idea = st.session_state.bulk_queue[0]["idea"][:50] if st.session_state.bulk_queue else ""
+            st.progress(_bdone / _btotal, text=f"מייצר {_bdone + 1} מתוך {_btotal}: {_bnext_idea}...")
+        else:
+            st.success(f"✅ הושלם! {_bdone} פוסטים ותמונות נוצרו בהצלחה")
+            if st.button("🗑 נקה תוצאות", key="clear_bulk_results_btn"):
+                st.session_state.bulk_results = []
+                st.session_state.bulk_total   = 0
+                st.rerun()
+
+        for _ri, _res in enumerate(reversed(st.session_state.bulk_results)):
+            _blabel = f"📄 {_res['category']} — {_res['idea'][:60]}"
+            with st.expander(_blabel, expanded=(_ri == 0)):
+                _rcol_p, _rcol_i = st.columns([1, 1])
+                with _rcol_p:
+                    st.text_area("", value=_res["post_text"], height=280,
+                                 key=f"bulk_post_{_ri}", label_visibility="collapsed")
+                    st.download_button("⬇ טקסט", data=_res["post_text"].encode("utf-8"),
+                        file_name=f"bulk_post_{_ri}.txt", mime="text/plain",
+                        use_container_width=True, key=f"bulk_dl_txt_{_ri}")
+                    if _res.get("auto_style_explanation") and _res.get("auto_chosen_style"):
+                        _bcsname = PRESET_STYLES.get(_res["auto_chosen_style"], {}).get("hebrew_name", "")
+                        st.markdown(f"""
+<div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.25);
+     border-radius:12px;padding:0.8rem 1rem;margin-top:0.6rem;direction:rtl;text-align:right;">
+  <div style="font-size:0.75rem;font-weight:700;color:rgba(167,139,250,0.9);margin-bottom:0.3rem;">
+      🤖 המערכת בחרה: {_bcsname}
+  </div>
+  <div style="font-size:0.82rem;color:rgba(255,255,255,0.72);line-height:1.5;">
+      {_res["auto_style_explanation"]}
+  </div>
+</div>""", unsafe_allow_html=True)
+                with _rcol_i:
+                    for _ji, _bimg in enumerate(_res.get("images") or []):
+                        st.image(_bimg, use_container_width=True)
+                        st.download_button("⬇ תמונה", data=_bimg,
+                            file_name=f"bulk_img_{_ri}_{_ji}.png", mime="image/png",
+                            use_container_width=True, key=f"bulk_dl_img_{_ri}_{_ji}")
+
+        st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
+
     # ── הגדרות תמונה ──
     col_settings, col_spacer = st.columns([2, 1])
     with col_settings:
@@ -1192,24 +1656,53 @@ with tab_create:
             st.stop()
 
         st.session_state.generating = True
-        _this_gen_style = st.session_state.style_description  # capture for this run
-        st.session_state.style_description = ""               # reset so next generation starts clean
+
+        # ── Re-read all current inputs fresh at generation time ──────────────
+        # Image style: prefer explicit style_description; fall back to whatever
+        # is currently typed in the free-style textarea (even if not yet Applied)
+        _this_gen_style = (
+            st.session_state.style_description.strip()
+            or st.session_state.get("free_style_text", "").strip()
+        )
+        st.session_state.last_image_style = _this_gen_style   # persist for image-only retries
+        st.session_state.prev_image_bytes = None              # clear previous on full regeneration
+
+        # Writing style: generated guide > uploaded DOCX guide
+        # (both already in session_state, re-read here for clarity)
+        # Preset writing style, marketing framework, language, content_type,
+        # word_count, notes — all already current via sidebar widgets above
         try:
             wc = st.session_state.word_count if st.session_state.word_count > 0 else None
             effective_style = st.session_state.generated_style_guide or style_guide
-            preset_instr = PRESET_STYLES[st.session_state.preset_style]["prompt_instruction"] if st.session_state.preset_style != "none" else ""
             fw_instr = MARKETING_FRAMEWORKS[st.session_state.marketing_framework]["structure"] if st.session_state.marketing_framework != "none" else ""
 
             col_prog, _ = st.columns([2, 1])
             with col_prog:
                 progress = st.progress(0, text="מתחיל...")
+            _stc.html(_tips_rotator_html(), height=80, scrolling=False)
+
+            # Resolve writing style — auto mode calls Claude to pick the best fit
+            if st.session_state.preset_style == "auto":
+                progress.progress(5, text="🤖 בוחר סגנון כתיבה מתאים...")
+                _auto_key, _auto_expl = generator.select_best_style(effective_category, effective_idea)
+                preset_instr = PRESET_STYLES[_auto_key]["prompt_instruction"]
+                st.session_state.auto_chosen_style = _auto_key
+                st.session_state.style_choice_explanation = _auto_expl
+            elif st.session_state.preset_style != "none":
+                preset_instr = PRESET_STYLES[st.session_state.preset_style]["prompt_instruction"]
+                st.session_state.auto_chosen_style = ""
+                st.session_state.style_choice_explanation = ""
+            else:
+                preset_instr = ""
+                st.session_state.auto_chosen_style = ""
+                st.session_state.style_choice_explanation = ""
 
             _combined_notes = "\n".join(filter(None, [
                 st.session_state.post_notes,
                 f"הוראות ליישום הסגנון:\n{st.session_state.style_usage_instructions}"
                 if st.session_state.style_usage_instructions else ""
             ]))
-            progress.progress(10, text="✍️ כותב פוסט...")
+            progress.progress(15, text="✍️ כותב פוסט...")
             try:
                 st.session_state.post_text = generator.generate_post(
                     effective_style, effective_category, effective_idea,
@@ -1262,19 +1755,24 @@ with tab_create:
                 )
                 archive_entry = {
                     "post_text": st.session_state.post_text,
-                    "image_bytes": st.session_state.image_bytes,
+                    "images": [st.session_state.image_bytes] if st.session_state.image_bytes else [],
                     "category": effective_category,
                     "idea": effective_idea,
                     "content_type": st.session_state.content_type,
                     "language": st.session_state.language,
-                    "preset_style": PRESET_STYLES[st.session_state.preset_style]["hebrew_name"] if st.session_state.preset_style != "none" else "ללא",
+                    "preset_style": PRESET_STYLES[st.session_state.preset_style]["hebrew_name"]
+                                    if st.session_state.preset_style not in ("none", "auto")
+                                    else (PRESET_STYLES[st.session_state.auto_chosen_style]["hebrew_name"]
+                                          if st.session_state.auto_chosen_style else "ללא"),
                     "marketing_framework": st.session_state.marketing_framework,
                     "timestamp": int(time.time()),
                     "timestamp_str": time.strftime("%d/%m/%Y %H:%M"),
                 }
                 st.session_state.archive.append(archive_entry)
+                st.session_state.current_archive_idx = len(st.session_state.archive) - 1
                 if len(st.session_state.archive) > 20:
                     st.session_state.archive = st.session_state.archive[-20:]
+                    st.session_state.current_archive_idx = len(st.session_state.archive) - 1
         finally:
             st.session_state.generating = False
 
@@ -1308,6 +1806,20 @@ with tab_create:
             if _retry_fb != st.session_state.retry_feedback:
                 st.session_state.retry_feedback = _retry_fb
 
+            # Auto style explanation box
+            if st.session_state.get("style_choice_explanation") and st.session_state.get("auto_chosen_style"):
+                _csname = PRESET_STYLES.get(st.session_state.auto_chosen_style, {}).get("hebrew_name", "")
+                st.markdown(f"""
+<div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.25);
+     border-radius:12px;padding:0.9rem 1.2rem;margin-top:0.8rem;direction:rtl;text-align:right;">
+  <div style="font-size:0.8rem;font-weight:700;color:rgba(167,139,250,0.9);margin-bottom:0.4rem;">
+      🤖 המערכת בחרה: {_csname}
+  </div>
+  <div style="font-size:0.85rem;color:rgba(255,255,255,0.75);line-height:1.6;">
+      {st.session_state.style_choice_explanation}
+  </div>
+</div>""", unsafe_allow_html=True)
+
             if st.button("🔄 נסה שוב — פוסט בלבד", key="retry_post_btn", use_container_width=True):
                 if not face_source:
                     st.error("יש להעלות תמונת ייחוס")
@@ -1318,7 +1830,7 @@ with tab_create:
                             _retry_category = category or "כללי"
                             wc = st.session_state.word_count if st.session_state.word_count > 0 else None
                             effective_style = st.session_state.generated_style_guide or style_guide
-                            preset_instr = PRESET_STYLES[st.session_state.preset_style]["prompt_instruction"] if st.session_state.preset_style != "none" else ""
+                            preset_instr = PRESET_STYLES[st.session_state.preset_style]["prompt_instruction"] if st.session_state.preset_style not in ("none", "auto") else ""
                             fw_instr = MARKETING_FRAMEWORKS[st.session_state.marketing_framework]["structure"] if st.session_state.marketing_framework != "none" else ""
                             _retry_combined_notes = "\n".join(filter(None, [
                                 st.session_state.post_notes,
@@ -1357,12 +1869,31 @@ with tab_create:
                 "⬇ הורד תמונה", data=st.session_state.image_bytes,
                 file_name=dl_name_img, mime="image/png", use_container_width=True,
             )
+            # Previous image (kept after retry)
+            if st.session_state.prev_image_bytes:
+                st.markdown('<div class="section-label" style="margin-top:1.2rem; opacity:0.7;">🖼 תמונה קודמת</div>', unsafe_allow_html=True)
+                st.image(st.session_state.prev_image_bytes, use_container_width=True)
+                st.download_button(
+                    "⬇ הורד תמונה קודמת", data=st.session_state.prev_image_bytes,
+                    file_name=f"prev_{dl_name_img}", mime="image/png",
+                    use_container_width=True, key="dl_prev_img",
+                )
+            st.markdown('<div class="section-label" style="margin-top:0.8rem;">💬 הערות לשיפור התמונה</div>', unsafe_allow_html=True)
+            _img_fb = st.text_area(
+                "", value=st.session_state.get("image_retry_feedback", ""),
+                height=90, key="image_retry_feedback_input",
+                placeholder="לדוגמה: שנה את הרקע לטבע, הוסף תאורה דרמטית, שנה את הסגנון לסקיצה...",
+                label_visibility="collapsed",
+            )
+            if _img_fb != st.session_state.image_retry_feedback:
+                st.session_state.image_retry_feedback = _img_fb
             if st.button("🔄 נסה שוב — תמונה בלבד", key="retry_image_btn", use_container_width=True):
                 if not face_source:
                     st.error("יש להעלות תמונת ייחוס")
                 elif not st.session_state.post_text:
                     st.error("יש לצור פוסט תחילה")
                 else:
+                    _stc.html(_tips_rotator_html(), height=80, scrolling=False)
                     with st.spinner("מחדש תמונה (30-60 שניות)..."):
                         try:
                             image_text = ""
@@ -1373,17 +1904,25 @@ with tab_create:
                             scene = generator.generate_image_prompt(st.session_state.post_text)
                             if st.session_state.image_notes:
                                 scene = f"{scene}. Additional direction: {st.session_state.image_notes}"
-                            if st.session_state.retry_feedback:
-                                scene = f"{scene}. User feedback: {st.session_state.retry_feedback}"
+                            if st.session_state.image_retry_feedback:
+                                scene = f"{scene}. Image correction request: {st.session_state.image_retry_feedback}"
                             _extra_refs = [r["bytes"] for r in st.session_state.reference_images[1:] if r]
-                            st.session_state.image_bytes = generator.generate_image(
+                            # Keep the previous image before replacing
+                            st.session_state.prev_image_bytes = st.session_state.image_bytes
+                            new_img = generator.generate_image(
                                 face_source, scene,
                                 aspect_ratio=st.session_state.aspect_ratio,
-                                style_description=st.session_state.style_description,
+                                # Always reuse the style from the original generation
+                                style_description=st.session_state.last_image_style,
                                 add_text=st.session_state.add_text_to_image,
                                 text_content=image_text,
                                 extra_reference_images=_extra_refs or None,
                             )
+                            st.session_state.image_bytes = new_img
+                            # Append to the current archive entry so all images are accessible
+                            _arc_idx = st.session_state.get("current_archive_idx")
+                            if _arc_idx is not None and 0 <= _arc_idx < len(st.session_state.archive):
+                                st.session_state.archive[_arc_idx]["images"].append(new_img)
                             st.rerun()
                         except Exception as e:
                             st.error(f"שגיאה: {e}")
@@ -1514,7 +2053,11 @@ with tab_visual:
                         st.session_state.style_description = enhanced
                         st.rerun()
                     except Exception as e:
-                        st.error(f"שגיאה: {e}")
+                        _err = str(e)
+                        if "529" in _err or "overload" in _err.lower():
+                            st.warning("השרת עמוס כרגע — נסה שוב בעוד מספר שניות.")
+                        else:
+                            st.error("שגיאה בשיפור הסגנון. נסה שוב.")
             else:
                 st.warning("כתוב תיאור סגנון תחילה")
     with col_apply:
@@ -1523,9 +2066,19 @@ with tab_visual:
                 st.session_state.style_description = free_style_text.strip()
                 st.success("✓ הסגנון עודכן")
 
-    if st.button("💾 שמור הגדרות תמונה", use_container_width=True, key="save_visual_settings_btn"):
-        save_user_settings()
-        st.success("✓ נשמר")
+    col_save_vis, col_reset_vis = st.columns(2)
+    with col_save_vis:
+        if st.button("💾 שמור הגדרות תמונה", use_container_width=True, key="save_visual_settings_btn"):
+            save_user_settings()
+            st.success("✓ נשמר")
+    with col_reset_vis:
+        if st.button("🗑 איפוס סגנון תמונה", use_container_width=True, key="reset_visual_style_btn"):
+            st.session_state.style_description = ""
+            st.session_state.free_style_text = ""
+            st.session_state.style_image_list = []
+            st.session_state.last_image_style = ""
+            st.session_state["free_style_input"] = ""
+            st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1812,7 +2365,7 @@ with tab_style:
     if _tab_style_active:
         st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
         _active_parts = []
-        if st.session_state.preset_style != "none":
+        if st.session_state.preset_style not in ("none", "auto"):
             _active_parts.append(f"סגנון מוכן: {PRESET_STYLES[st.session_state.preset_style]['hebrew_name']}")
         if st.session_state.style_bytes:
             _active_parts.append("קובץ סגנון מועלה")
@@ -1899,7 +2452,7 @@ with tab_style:
                 )
             with col_clear_buf:
                 if st.session_state.style_text_buffer:
-                    if st.button("🗑 נקה בפר", key="clear_style_buf_btn", use_container_width=True):
+                    if st.button("🗑 מחק זיכרון והתחל מחדש", key="clear_style_buf_btn", use_container_width=True):
                         st.session_state.style_text_buffer = []
                         st.rerun()
 
@@ -2086,12 +2639,19 @@ with tab_archive:
                     file_name=f"{safe_cat}_{safe_idea}_{entry['timestamp']}.txt",
                     mime="text/plain", use_container_width=True, key=f"arc_dl_post_view_{view_idx}")
             with col_arc_img:
-                st.markdown('<div class="section-label">🖼 תמונה</div>', unsafe_allow_html=True)
-                if entry.get("image_bytes"):
-                    st.image(entry["image_bytes"], use_container_width=True)
-                    st.download_button("⬇ הורד תמונה", data=entry["image_bytes"],
-                        file_name=f"{safe_cat}_{safe_idea}_{entry['timestamp']}.png",
-                        mime="image/png", use_container_width=True, key=f"arc_dl_img_view_{view_idx}")
+                st.markdown('<div class="section-label">🖼 תמונות</div>', unsafe_allow_html=True)
+                _view_imgs = entry.get("images") or ([entry["image_bytes"]] if entry.get("image_bytes") else [])
+                for img_i, img_b in enumerate(_view_imgs):
+                    if len(_view_imgs) > 1:
+                        st.caption(f"תמונה {img_i + 1}")
+                    st.image(img_b, use_container_width=True)
+                    st.download_button(
+                        f"⬇ הורד תמונה {img_i+1}" if len(_view_imgs) > 1 else "⬇ הורד תמונה",
+                        data=img_b,
+                        file_name=f"{safe_cat}_{safe_idea}_{entry['timestamp']}_img{img_i+1}.png",
+                        mime="image/png", use_container_width=True,
+                        key=f"arc_dl_img_view_{view_idx}_{img_i}"
+                    )
         else:
             # Gallery card grid — 3 columns
             cols = st.columns(3)
@@ -2101,14 +2661,19 @@ with tab_archive:
                 safe_idea = _safe_filename(entry["idea"])
                 preview_text = entry["post_text"][:130].replace("\n", " ")
                 with cols[i % 3]:
+                    _idea_short = entry['idea'][:50] + ("…" if len(entry['idea']) > 50 else "")
                     st.markdown(f"""
 <div style="border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:1rem;
-    margin-bottom:1rem;background:rgba(255,255,255,0.03);direction:rtl;text-align:right;">
-    <div style="font-size:0.72rem;color:rgba(255,255,255,0.35);margin-bottom:0.4rem;">{entry.get('timestamp_str','')}</div>
-    <div style="font-size:0.8rem;font-weight:600;color:rgba(255,255,255,0.8);margin-bottom:0.4rem;">{entry['category']}</div>
-    <div style="font-size:0.82rem;color:rgba(255,255,255,0.6);line-height:1.5;">{preview_text}…</div>
+    margin-bottom:0.6rem;background:rgba(255,255,255,0.03);direction:rtl;text-align:right;">
+    <div style="font-size:0.72rem;color:rgba(255,255,255,0.35);margin-bottom:0.3rem;">{entry.get('timestamp_str','')}</div>
+    <div style="font-size:0.8rem;font-weight:700;color:rgba(255,255,255,0.9);margin-bottom:0.2rem;">{entry['category']}</div>
+    <div style="font-size:0.78rem;color:rgba(167,139,250,0.85);margin-bottom:0.4rem;">{_idea_short}</div>
+    <div style="font-size:0.78rem;color:rgba(255,255,255,0.5);line-height:1.5;">{preview_text}…</div>
 </div>""", unsafe_allow_html=True)
-                    c1, c2, c3 = st.columns([2, 1, 1])
+                    # Buttons row
+                    _imgs = entry.get("images") or ([entry["image_bytes"]] if entry.get("image_bytes") else [])
+                    _n_imgs = len(_imgs)
+                    c1, c2 = st.columns([1, 1])
                     with c1:
                         if st.button("👁 צפה", key=f"arc_view_{real_idx}", use_container_width=True):
                             st.session_state.archive_view_idx = real_idx
@@ -2117,13 +2682,14 @@ with tab_archive:
                         st.download_button("📄 טקסט", data=entry["post_text"].encode("utf-8"),
                             file_name=f"{safe_cat}_{safe_idea}_{entry['timestamp']}.txt",
                             mime="text/plain", use_container_width=True, key=f"arc_dl_txt_{real_idx}")
-                    with c3:
-                        if entry.get("image_bytes"):
-                            st.download_button("🖼 תמונה", data=entry["image_bytes"],
-                                file_name=f"{safe_cat}_{safe_idea}_{entry['timestamp']}.png",
-                                mime="image/png", use_container_width=True, key=f"arc_dl_img_{real_idx}")
-                        else:
-                            st.button("🖼", disabled=True, use_container_width=True, key=f"arc_no_img_{real_idx}")
+                    for img_i, img_b in enumerate(_imgs):
+                        label = f"🖼 תמונה {img_i+1}" if _n_imgs > 1 else "🖼 תמונה"
+                        st.download_button(label, data=img_b,
+                            file_name=f"{safe_cat}_{safe_idea}_{entry['timestamp']}_img{img_i+1}.png",
+                            mime="image/png", use_container_width=True,
+                            key=f"arc_dl_img_{real_idx}_{img_i}")
+                    if not _imgs:
+                        st.button("🖼", disabled=True, use_container_width=True, key=f"arc_no_img_{real_idx}")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
