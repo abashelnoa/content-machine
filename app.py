@@ -459,8 +459,8 @@ textarea,
     color: #ffffff !important;
     -webkit-text-fill-color: #ffffff !important;
     direction: rtl;
-    font-size: 0.93rem !important;
-    line-height: 1.8 !important;
+    font-size: 1.12rem !important;
+    line-height: 1.55 !important;
     padding: 1rem !important;
 }
 textarea::placeholder,
