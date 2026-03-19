@@ -111,56 +111,162 @@ GENERATION_TIPS = [
 ]
 
 
-def _tips_rotator_html() -> str:
-    """Returns a self-contained HTML/JS component that rotates tips every 5 s."""
+def _tips_rotator_html(font_b64: str = "") -> str:
+    """Returns a full-page HTML document for _stc.html() that shows rotating tips.
+
+    Uses the Assistant variable font when font_b64 is provided, otherwise
+    falls back to Heebo from Google Fonts (both support Hebrew).
+    Tips rotate every 7 seconds with a smooth slide-fade transition.
+    """
     import json as _json
     tips_js = _json.dumps(GENERATION_TIPS, ensure_ascii=False)
-    return f"""
-<div id="tips-wrap" style="
-    direction:rtl;
-    text-align:center;
-    margin-top:0.6rem;
-    min-height:56px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-">
-  <div id="tip-box" style="
-    display:inline-block;
-    max-width:640px;
-    padding:0.55rem 1.1rem;
-    border-radius:12px;
-    background:rgba(124,58,237,0.10);
-    border:1px solid rgba(124,58,237,0.22);
-    font-size:0.88rem;
-    line-height:1.55;
-    color:rgba(255,255,255,0.88);
-    transition: opacity 0.4s ease;
-    opacity:1;
-  "></div>
+    icons_js = _json.dumps(
+        ["💡","✨","🚀","🎯","📱","🎨","📊","💬","🔥","⚡","🌟","💎","🧠","🎤","📣"],
+        ensure_ascii=False,
+    )
+    font_face = (
+        f"@font-face{{font-family:'Assistant';"
+        f"src:url('data:font/truetype;base64,{font_b64}') format('truetype');"
+        f"font-weight:100 900;}}"
+        if font_b64
+        else "@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;600;700&display=swap');"
+    )
+    ff = "'Assistant','Heebo','Arial Hebrew',Arial,sans-serif"
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+{font_face}
+*{{margin:0;padding:0;box-sizing:border-box;}}
+html,body{{
+  width:100%;height:100%;
+  background:transparent;
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden;
+}}
+#wrap{{
+  width:96%;max-width:780px;
+  direction:rtl;
+  font-family:{ff};
+}}
+#card{{
+  position:relative;
+  background:linear-gradient(135deg,rgba(109,40,217,0.18),rgba(30,64,175,0.14));
+  border:1.5px solid rgba(167,139,250,0.40);
+  border-radius:22px;
+  padding:1.6rem 2.2rem 1.8rem;
+  overflow:hidden;
+  box-shadow:0 8px 32px rgba(109,40,217,0.22), inset 0 1px 0 rgba(255,255,255,0.06);
+}}
+/* animated glow border */
+#card::before{{
+  content:'';position:absolute;inset:-1px;border-radius:23px;
+  background:conic-gradient(from var(--angle,0deg),
+    transparent 60%,rgba(167,139,250,0.5) 75%,transparent 90%);
+  animation:spin 4s linear infinite;z-index:0;
+}}
+@property --angle{{syntax:'<angle>';inherits:false;initial-value:0deg;}}
+@keyframes spin{{to{{--angle:360deg;}}}}
+#card-inner{{position:relative;z-index:1;}}
+#icon{{
+  font-size:2.4rem;
+  display:block;
+  text-align:center;
+  margin-bottom:0.55rem;
+  filter:drop-shadow(0 0 10px rgba(167,139,250,0.7));
+  transition:opacity .45s ease,transform .45s ease;
+}}
+#text{{
+  font-size:1.35rem;
+  font-weight:600;
+  line-height:1.65;
+  color:rgba(255,255,255,0.93);
+  text-align:center;
+  direction:rtl;
+  transition:opacity .45s ease,transform .45s ease;
+  min-height:2.8rem;
+}}
+/* progress bar */
+#prog-bar{{
+  margin-top:1.1rem;
+  height:3px;
+  border-radius:3px;
+  background:rgba(255,255,255,0.10);
+  overflow:hidden;
+}}
+#prog-fill{{
+  height:100%;width:100%;
+  background:linear-gradient(90deg,#a78bfa,#60a5fa);
+  border-radius:3px;
+  transform-origin:left;
+  animation:prog 7s linear;
+}}
+@keyframes prog{{from{{transform:scaleX(1);}}to{{transform:scaleX(0);}}}}
+/* dots */
+#dots{{display:flex;justify-content:center;gap:6px;margin-top:0.85rem;}}
+.dot{{width:7px;height:7px;border-radius:50%;
+  background:rgba(167,139,250,0.25);
+  transition:background .3s,transform .3s;}}
+.dot.on{{background:rgba(167,139,250,0.9);transform:scale(1.5);}}
+</style></head><body>
+<div id="wrap">
+  <div id="card">
+    <div id="card-inner">
+      <span id="icon">💡</span>
+      <div id="text"></div>
+      <div id="prog-bar"><div id="prog-fill"></div></div>
+      <div id="dots"></div>
+    </div>
+  </div>
 </div>
 <script>
-(function(){{
-  var tips = {tips_js};
-  // Shuffle Fisher-Yates
-  for(var i=tips.length-1;i>0;i--){{
-    var j=Math.floor(Math.random()*(i+1));
-    var tmp=tips[i]; tips[i]=tips[j]; tips[j]=tmp;
-  }}
-  var idx=0;
-  var box=document.getElementById('tip-box');
-  function showTip(){{
-    box.style.opacity='0';
-    setTimeout(function(){{
-      box.innerHTML='💡 '+tips[idx];
-      box.style.opacity='1';
-      idx=(idx+1)%tips.length;
-    }},400);
-  }}
-  showTip();
-  setInterval(showTip,5000);
-}})();
+var tips={tips_js};
+var icons={icons_js};
+var DOT_COUNT=7;
+var INTERVAL=7000;
+// shuffle
+for(var i=tips.length-1;i>0;i--){{
+  var j=Math.floor(Math.random()*(i+1));
+  var t=tips[i];tips[i]=tips[j];tips[j]=t;
+}}
+var idx=0;
+var iconEl=document.getElementById('icon');
+var textEl=document.getElementById('text');
+var fillEl=document.getElementById('prog-fill');
+var dotsEl=document.getElementById('dots');
+// build dots
+for(var d=0;d<DOT_COUNT;d++){{
+  var dot=document.createElement('div');
+  dot.className='dot'+(d===0?' on':'');
+  dot.id='d'+d;
+  dotsEl.appendChild(dot);
+}}
+function showTip(){{
+  // out
+  iconEl.style.opacity='0';iconEl.style.transform='translateY(-6px)';
+  textEl.style.opacity='0';textEl.style.transform='translateY(-8px)';
+  setTimeout(function(){{
+    textEl.innerHTML=tips[idx];
+    iconEl.textContent=icons[idx%icons.length];
+    // in
+    iconEl.style.opacity='1';iconEl.style.transform='translateY(0)';
+    textEl.style.opacity='1';textEl.style.transform='translateY(0)';
+    // dots
+    var prev=(idx-1+DOT_COUNT)%DOT_COUNT;
+    var cur=idx%DOT_COUNT;
+    var pEl=document.getElementById('d'+prev);
+    var cEl=document.getElementById('d'+cur);
+    if(pEl)pEl.classList.remove('on');
+    if(cEl)cEl.classList.add('on');
+    // restart progress
+    fillEl.style.animation='none';
+    void fillEl.offsetWidth;
+    fillEl.style.animation='prog '+INTERVAL+'ms linear';
+    idx=(idx+1)%tips.length;
+  }},460);
+}}
+showTip();
+setInterval(showTip,INTERVAL);
 </script>
+</body></html>
 """
 
 
@@ -1243,34 +1349,63 @@ with st.sidebar:
     )
     st.session_state.image_notes = image_notes_val
 
-    # ── 3. Generate button ──
+    # ── 3. Generate buttons ──
+    _gen_disabled = st.session_state.get("generating", False)
     generate_btn = st.button(
         "✦ צור פוסט + תמונה",
         use_container_width=True,
-        disabled=st.session_state.get("generating", False),
+        disabled=_gen_disabled,
         key="generate_post_btn",
     )
     if generate_btn:
         st.session_state["_jump_to_create"] = True
+        st.session_state["_text_only"] = False
 
-    # ── Bulk generation button ──
+    generate_text_only_btn = st.button(
+        "✍️ צור פוסט בלבד (ללא תמונה)",
+        use_container_width=True,
+        disabled=_gen_disabled,
+        key="generate_text_only_btn",
+    )
+    if generate_text_only_btn:
+        st.session_state["_jump_to_create"] = True
+        st.session_state["_text_only"] = True
+
+    # ── Bulk generation buttons ──
     _bulk_source = st.session_state.selected_ideas or [
         {"category": _bc, "idea": _bi}
         for _bc, _bil in (post_ideas or {}).items()
         for _bi in _bil
     ]
     if _bulk_source and face_source:
+        _bulk_disabled = bool(st.session_state.get("generating") or st.session_state.get("bulk_running"))
         bulk_btn = st.button(
             f"🚀 צור הכל ({len(_bulk_source)} רעיונות)",
             use_container_width=True,
             key="bulk_generate_btn",
-            disabled=bool(st.session_state.get("generating") or st.session_state.get("bulk_running")),
+            disabled=_bulk_disabled,
         )
         if bulk_btn:
             st.session_state.bulk_queue = _bulk_source.copy()
             st.session_state.bulk_total = len(_bulk_source)
             st.session_state.bulk_results = []
             st.session_state.bulk_running = True
+            st.session_state.bulk_text_only = False
+            st.session_state["_jump_to_create"] = True
+            st.rerun()
+
+        bulk_text_only_btn = st.button(
+            f"✍️ צור כל הפוסטים בלבד ({len(_bulk_source)} רעיונות)",
+            use_container_width=True,
+            key="bulk_text_only_btn",
+            disabled=_bulk_disabled,
+        )
+        if bulk_text_only_btn:
+            st.session_state.bulk_queue = _bulk_source.copy()
+            st.session_state.bulk_total = len(_bulk_source)
+            st.session_state.bulk_results = []
+            st.session_state.bulk_running = True
+            st.session_state.bulk_text_only = True
             st.session_state["_jump_to_create"] = True
             st.rerun()
 
@@ -1467,6 +1602,23 @@ if st.session_state.get("bulk_running") and st.session_state.get("bulk_queue"):
 
     _bpost_text   = ""
     _bimage_bytes = None
+    _bdone_so_far = len(st.session_state.bulk_results)
+    _btotal_count = st.session_state.bulk_total or 1
+    # Show patience message + tips during the blocking API calls
+    st.markdown(f"""
+<div style="direction:rtl;text-align:center;padding:0.7rem 1.2rem 0.2rem;
+  background:linear-gradient(135deg,rgba(109,40,217,0.14),rgba(30,64,175,0.10));
+  border:1px solid rgba(167,139,250,0.30);border-radius:16px;margin-bottom:0.5rem;">
+  <div style="font-size:1.1rem;font-weight:700;color:rgba(255,255,255,0.95);
+    font-family:'Assistant','Heebo',Arial,sans-serif;">
+    ⏳ יוצר פוסט {_bdone_so_far + 1} מתוך {_btotal_count}: <em>{_bitem["idea"][:50]}</em>
+  </div>
+  <div style="font-size:0.85rem;color:rgba(255,255,255,0.60);margin-top:0.2rem;
+    font-family:'Assistant','Heebo',Arial,sans-serif;">
+    השאירו את החלון פתוח — נחזור אליכם בקרוב 🙏
+  </div>
+</div>""", unsafe_allow_html=True)
+    _stc.html(_tips_rotator_html(_font_b64), height=220, scrolling=False)
     try:
         _bpost_text = generator.generate_post(
             _beff_sty, _bcat, _bidea,
@@ -1477,16 +1629,17 @@ if st.session_state.get("bulk_running") and st.session_state.get("bulk_queue"):
             marketing_framework=_bfw,
             post_notes=_bnotes,
         )
-        _bscene = generator.generate_image_prompt(_bpost_text)
-        if st.session_state.image_notes:
-            _bscene = f"{_bscene}. Additional direction: {st.session_state.image_notes}"
-        _bimage_bytes = generator.generate_image(
-            face_source, _bscene,
-            aspect_ratio=_get_aspect_ratio(),
-            style_description=_bstyle,
-            add_text=st.session_state.add_text_to_image,
-            extra_reference_images=_bextra or None,
-        )
+        if not st.session_state.get("bulk_text_only"):
+            _bscene = generator.generate_image_prompt(_bpost_text)
+            if st.session_state.image_notes:
+                _bscene = f"{_bscene}. Additional direction: {st.session_state.image_notes}"
+            _bimage_bytes = generator.generate_image(
+                face_source, _bscene,
+                aspect_ratio=_get_aspect_ratio(),
+                style_description=_bstyle,
+                add_text=st.session_state.add_text_to_image,
+                extra_reference_images=_bextra or None,
+            )
     except Exception as _berr:
         st.warning(f"שגיאה ב-\"{_bidea[:40]}\": {_berr}")
 
@@ -1574,7 +1727,7 @@ with tab_create:
     השאירו את החלון פתוח ונחזור אליכם בקרוב 🙏
   </div>
 </div>""", unsafe_allow_html=True)
-            _stc.html(_tips_rotator_html(), height=80, scrolling=False)
+            _stc.html(_tips_rotator_html(_font_b64), height=220, scrolling=False)
         else:
             st.success(f"✅ הושלם! {_bdone} פוסטים ותמונות נוצרו בהצלחה")
             if st.button("🗑 נקה תוצאות", key="clear_bulk_results_btn"):
@@ -1611,7 +1764,7 @@ with tab_create:
                         placeholder="למשל: קצר יותר, הוסף סטטיסטיקה, שנה טון...",
                         label_visibility="collapsed")
                     if st.button("🔄 צור פוסט מחדש", key=f"bulk_rp_{_aidx}", use_container_width=True):
-                        _stc.html(_tips_rotator_html(), height=80, scrolling=False)
+                        _stc.html(_tips_rotator_html(_font_b64), height=220, scrolling=False)
                         with st.spinner(f"מחדש פוסט עבור: {_res['idea'][:40]}..."):
                             try:
                                 _beff = st.session_state.generated_style_guide or (st.session_state.get("style_guide") or "")
@@ -1645,7 +1798,7 @@ with tab_create:
                         placeholder="למשל: שנה רקע לטבע, הוסף תאורה דרמטית...",
                         label_visibility="collapsed")
                     if st.button("🔄 צור תמונה מחדש", key=f"bulk_ri_{_aidx}", use_container_width=True):
-                        _stc.html(_tips_rotator_html(), height=80, scrolling=False)
+                        _stc.html(_tips_rotator_html(_font_b64), height=220, scrolling=False)
                         with st.spinner(f"מחדש תמונה עבור: {_res['idea'][:40]}..."):
                             try:
                                 _bi_scene = generator.generate_image_prompt(_res["post_text"])
@@ -1715,7 +1868,7 @@ with tab_create:
     st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
 
     # ── יצירה ──
-    if generate_btn and not st.session_state.get("generating", False):
+    if (generate_btn or generate_text_only_btn) and not st.session_state.get("generating", False):
         if not face_source:
             st.error("יש להעלות תמונת ייחוס בלשונית הגדרות תמונה")
             st.stop()
@@ -1752,7 +1905,7 @@ with tab_create:
             col_prog, _ = st.columns([2, 1])
             with col_prog:
                 progress = st.progress(0, text="מתחיל...")
-            _stc.html(_tips_rotator_html(), height=80, scrolling=False)
+            _stc.html(_tips_rotator_html(_font_b64), height=220, scrolling=False)
 
             # Resolve writing style — auto mode calls Claude to pick the best fit
             if st.session_state.preset_style == "auto":
@@ -1790,32 +1943,35 @@ with tab_create:
                 st.error(f"שגיאה ביצירת פוסט: {e}")
                 st.stop()
 
-            image_text = ""
-            if st.session_state.add_text_to_image and st.session_state.post_text:
-                progress.progress(35, text="💬 יוצר טקסט לתמונה...")
-                try:
-                    image_text = generator.generate_text_for_image(
-                        st.session_state.post_text, st.session_state.language
-                    )
-                except Exception:
-                    image_text = ""
+            if not st.session_state.get("_text_only"):
+                image_text = ""
+                if st.session_state.add_text_to_image and st.session_state.post_text:
+                    progress.progress(35, text="💬 יוצר טקסט לתמונה...")
+                    try:
+                        image_text = generator.generate_text_for_image(
+                            st.session_state.post_text, st.session_state.language
+                        )
+                    except Exception:
+                        image_text = ""
 
-            progress.progress(50, text="🎨 מייצר תמונה (30-60 שניות)...")
-            try:
-                scene = generator.generate_image_prompt(st.session_state.post_text)
-                if st.session_state.image_notes:
-                    scene = f"{scene}. Additional direction: {st.session_state.image_notes}"
-                _extra_refs = [r["bytes"] for r in st.session_state.reference_images[1:] if r]
-                st.session_state.image_bytes = generator.generate_image(
-                    face_source, scene,
-                    aspect_ratio=_get_aspect_ratio(),
-                    style_description=_this_gen_style,
-                    add_text=st.session_state.add_text_to_image,
-                    text_content=image_text,
-                    extra_reference_images=_extra_refs or None,
-                )
-            except Exception as e:
-                st.error(f"שגיאה ביצירת תמונה: {e}")
+                progress.progress(50, text="🎨 מייצר תמונה (30-60 שניות)...")
+                try:
+                    scene = generator.generate_image_prompt(st.session_state.post_text)
+                    if st.session_state.image_notes:
+                        scene = f"{scene}. Additional direction: {st.session_state.image_notes}"
+                    _extra_refs = [r["bytes"] for r in st.session_state.reference_images[1:] if r]
+                    st.session_state.image_bytes = generator.generate_image(
+                        face_source, scene,
+                        aspect_ratio=_get_aspect_ratio(),
+                        style_description=_this_gen_style,
+                        add_text=st.session_state.add_text_to_image,
+                        text_content=image_text,
+                        extra_reference_images=_extra_refs or None,
+                    )
+                except Exception as e:
+                    st.error(f"שגיאה ביצירת תמונה: {e}")
+            else:
+                st.session_state.image_bytes = None
 
             progress.progress(100, text="✓ הושלם!")
             progress.empty()
@@ -1966,7 +2122,7 @@ with tab_create:
                 elif not st.session_state.post_text:
                     st.error("יש לצור פוסט תחילה")
                 else:
-                    _stc.html(_tips_rotator_html(), height=80, scrolling=False)
+                    _stc.html(_tips_rotator_html(_font_b64), height=220, scrolling=False)
                     with st.spinner("מחדש תמונה (30-60 שניות)..."):
                         try:
                             image_text = ""

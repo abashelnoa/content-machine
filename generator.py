@@ -175,9 +175,12 @@ _AR_HINT = {
 }
 
 _DEFAULT_STYLE = (
-    "Cinematic lighting, dark teal and electric blue color palette, "
-    "futuristic AI/tech atmosphere, bokeh background with subtle digital patterns, "
-    "photorealistic, studio quality, sharp focus on face."
+    "Carefully analyze the visual style, lighting, color palette, photography technique, "
+    "mood, and overall aesthetic of the uploaded reference photo. "
+    "Generate the new image in exactly the same visual style as the reference — "
+    "if it is photorealistic, generate photorealistically; if it has a specific artistic "
+    "style (illustration, sketch, vintage, etc.), match that style precisely. "
+    "Do not apply any unrelated default style."
 )
 
 # When the user specifies a style, it takes full priority — the default is dropped entirely.
