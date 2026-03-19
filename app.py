@@ -156,16 +156,7 @@ html,body{{
   overflow:hidden;
   box-shadow:0 8px 32px rgba(109,40,217,0.22), inset 0 1px 0 rgba(255,255,255,0.06);
 }}
-/* animated glow border */
-#card::before{{
-  content:'';position:absolute;inset:-1px;border-radius:23px;
-  background:conic-gradient(from var(--angle,0deg),
-    transparent 60%,rgba(167,139,250,0.5) 75%,transparent 90%);
-  animation:spin 4s linear infinite;z-index:0;
-}}
-@property --angle{{syntax:'<angle>';inherits:false;initial-value:0deg;}}
-@keyframes spin{{to{{--angle:360deg;}}}}
-#card-inner{{position:relative;z-index:1;}}
+#card-inner{{position:relative;}}
 #icon{{
   font-size:2.4rem;
   display:block;
@@ -1210,8 +1201,8 @@ def _ideas_tab_action():
     st.session_state["_ideas_rerun_trigger"] = True
 
 
-def _safe_filename(s: str) -> str:
-    return re.sub(r'[\\/:*?"<>|\s]', '_', s.strip())[:40]
+def _safe_filename(s) -> str:
+    return re.sub(r'[\\/:*?"<>|\s]', '_', (s or "untitled").strip())[:40]
 
 
 def check_api_keys() -> bool:
@@ -2004,6 +1995,7 @@ with tab_create:
                     st.session_state.current_archive_idx = len(st.session_state.archive) - 1
         finally:
             st.session_state.generating = False
+            st.rerun()  # Re-render without the generation block → tips disappear
 
     # ── תצוגת תוצאות ──
     col_post, col_img = st.columns([1, 1], gap="large")
