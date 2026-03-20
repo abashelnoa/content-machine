@@ -28,11 +28,11 @@ AUDIENCE_TYPE_OPTIONS = [
     ("not_sure",    "לא בטוח"),
 ]
 IDEA_TYPE_OPTIONS = [
-    ("emotional",  "רגשי"),
-    ("practical",  "פרקטי"),
-    ("mistakes",   "טעויות"),
-    ("authority",  "סמכות"),
-    ("comparison", "השוואות"),
+    ("emotional",  "רגשי — מוטיבציות, חששות, רצונות"),
+    ("practical",  "פרקטי — מקרי שימוש, תהליכים, משימות"),
+    ("mistakes",   "טעויות — מיתוסים, שגיאות נפוצות"),
+    ("authority",  "סמכות — תובנות, מיצוב מומחה"),
+    ("comparison", "השוואות — לפני/אחרי, מול"),
 ]
 
 load_dotenv()
@@ -1145,6 +1145,7 @@ def init_state():
         "selected_audience_types": [],
         "selected_idea_types": ["emotional", "practical"],
         "_aud_limit_error": False,
+        "_idea_limit_error": False,
         "generated_style_guide": "",
         "style_upload_key": 0,
         "preset_style": "auto",
@@ -1270,6 +1271,28 @@ def _aud_type_change(opt_id: str):
             current.remove(opt_id)
         st.session_state.selected_audience_types = current
         st.session_state["_aud_limit_error"] = False
+
+
+def _idea_type_change(opt_id: str):
+    """on_change callback for idea-type checkboxes. Enforces max-3 rule."""
+    st.session_state["_ideas_rerun_trigger"] = True
+    cb_key = f"idea_type_cb_{opt_id}"
+    is_checked = st.session_state.get(cb_key, False)
+    current = list(st.session_state.get("selected_idea_types", []))
+
+    if is_checked:
+        if len(current) >= 3:
+            st.session_state[cb_key] = False
+            st.session_state["_idea_limit_error"] = True
+        else:
+            current.append(opt_id)
+            st.session_state.selected_idea_types = current
+            st.session_state["_idea_limit_error"] = False
+    else:
+        if opt_id in current:
+            current.remove(opt_id)
+        st.session_state.selected_idea_types = current
+        st.session_state["_idea_limit_error"] = False
 
 
 def _render_toggle_group(label: str, options: list, selected_key: str,
@@ -2544,19 +2567,22 @@ with tab_ideas:
 
             # ── סוג הרעיונות שאני רוצה ──
             st.markdown("""
-<div style="direction:rtl; text-align:right; margin-bottom:0.3rem; margin-top:0.8rem;">
+<div style="direction:rtl; text-align:right; margin-bottom:0.35rem; margin-top:0.8rem;">
   <span style="font-size:1.6rem; font-weight:800; color:white; letter-spacing:-0.015em;">📂 סוג הרעיונות שאני רוצה</span>
-  <span style="display:block; font-size:0.82rem; color:rgba(167,139,250,0.85); margin-top:0.25rem; font-weight:500;">
-    ניתן לבחור עד 2 סוגים
+  <span style="display:block; font-size:0.82rem; color:rgba(167,139,250,0.85); margin-top:0.2rem; font-weight:500;">
+    ניתן לבחור עד 3 סוגים
   </span>
 </div>""", unsafe_allow_html=True)
-            _render_toggle_group(
-                "",
-                IDEA_TYPE_OPTIONS,
-                selected_key="selected_idea_types",
-                max_select=2,
-                exclusive_id=None,
-            )
+            for _ioid, _ in IDEA_TYPE_OPTIONS:
+                _ick = f"idea_type_cb_{_ioid}"
+                if _ick not in st.session_state:
+                    _default_sel = st.session_state.get("selected_idea_types", ["emotional", "practical"])
+                    st.session_state[_ick] = _ioid in _default_sel
+            for _ioid, _iolabel in IDEA_TYPE_OPTIONS:
+                st.checkbox(_iolabel, key=f"idea_type_cb_{_ioid}",
+                            on_change=_idea_type_change, args=(_ioid,))
+            if st.session_state.get("_idea_limit_error"):
+                st.warning("⚠️ ניתן לבחור עד 3 סוגים בלבד. כדי לבחור סוג נוסף, בטל סימון של אחד הנבחרים.")
             st.markdown('<div style="height:0.4rem"></div>', unsafe_allow_html=True)
 
             if st.button("📊 צור טבלת רעיונות", key="gen_ideas_table_btn", use_container_width=True):
