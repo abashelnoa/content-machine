@@ -1144,8 +1144,10 @@ def init_state():
         "ideas_table_idx": 0,
         "selected_audience_types": [],
         "selected_idea_types": ["emotional", "practical"],
+        "selected_ai_audiences": [],
         "_aud_limit_error": False,
         "_idea_limit_error": False,
+        "ideas_website_input": "",
         "generated_style_guide": "",
         "style_upload_key": 0,
         "preset_style": "auto",
@@ -1237,67 +1239,84 @@ def _ideas_tab_action():
     st.session_state["_ideas_rerun_trigger"] = True
 
 
-def _aud_type_change_inline(prev_selected: list) -> list:
-    """Called in the script body after rendering audience-type checkboxes.
-    Reads current checkbox states, enforces max-2 and Not-Sure exclusive rules,
-    updates session state, and returns the new selection list.
-    No on_change callback — avoids interfering with the two-rerun strategy."""
-    cur = [oid for oid, _ in AUDIENCE_TYPE_OPTIONS
-           if st.session_state.get(f"aud_type_cb_{oid}", False)]
+def _card_select(
+    options: list,
+    state_key: str,
+    max_select: int = 0,
+    exclusive_id: str | None = None,
+    limit_error_key: str = "",
+    ncols: int = 0,
+) -> None:
+    """Minimal selectable dark-card buttons. No on_change callbacks.
+    options:         list of (id, label)
+    state_key:       session_state key holding list[str] of selected IDs
+    max_select:      0 = unlimited; >0 = cap
+    exclusive_id:    option that clears all others when selected
+    limit_error_key: session_state key for limit-reached error flag
+    ncols:           0 = all in one row; N = N columns per row
+    """
+    selected = list(st.session_state.get(state_key, []))
+    n = len(options)
+    cpp = ncols if ncols > 0 else n
+    bpfx = f"crd_{state_key}"
 
-    if cur == prev_selected:
-        return prev_selected  # nothing changed
+    css = ""
+    for opt_id, *_ in options:
+        is_sel = opt_id in selected
+        bg  = "rgba(109,40,217,0.14)" if is_sel else "rgba(255,255,255,0.035)"
+        bd  = "1.5px solid rgba(167,139,250,0.55)" if is_sel else "1px solid rgba(255,255,255,0.09)"
+        clr = "rgba(255,255,255,0.95)" if is_sel else "rgba(255,255,255,0.62)"
+        fw  = "600" if is_sel else "400"
+        css += (
+            f'div[data-testid="stButton"]>button#{bpfx}_{opt_id}{{'
+            f'background:{bg}!important;border:{bd}!important;'
+            f'color:{clr}!important;-webkit-text-fill-color:{clr}!important;'
+            f'border-radius:8px!important;font-size:0.84rem!important;'
+            f'font-weight:{fw}!important;padding:0.48rem 0.75rem!important;'
+            f'text-align:right!important;direction:rtl!important;'
+            f'box-shadow:none!important;line-height:1.3!important;'
+            f'white-space:normal!important;}}'
+        )
+    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
-    # Not-Sure exclusive rule
-    if "not_sure" in cur and len(cur) > 1:
-        if "not_sure" not in prev_selected:
-            # not_sure was just added → clear everything else
-            for oid, _ in AUDIENCE_TYPE_OPTIONS:
-                if oid != "not_sure":
-                    st.session_state[f"aud_type_cb_{oid}"] = False
-            cur = ["not_sure"]
-        else:
-            # something else added while not_sure was selected → drop not_sure
-            st.session_state["aud_type_cb_not_sure"] = False
-            cur = [oid for oid in cur if oid != "not_sure"]
+    clicked_id = None
+    for r0 in range(0, n, cpp):
+        row = options[r0:r0 + cpp]
+        cols = st.columns(len(row))
+        for ci, (opt_id, label) in enumerate(row):
+            with cols[ci]:
+                if st.button(label, key=f"{bpfx}_{opt_id}", use_container_width=True):
+                    clicked_id = opt_id
 
-    # Max-2 rule
-    real = [oid for oid in cur if oid != "not_sure"]
-    if len(real) > 2:
-        newly = [oid for oid in real if oid not in prev_selected]
-        if newly:
-            st.session_state[f"aud_type_cb_{newly[-1]}"] = False
-            cur = [oid for oid in cur if oid != newly[-1]]
-        st.session_state["_aud_limit_error"] = True
+    if clicked_id is None:
+        return
+
+    cur = list(selected)
+    if clicked_id in cur:
+        cur.remove(clicked_id)
+        if limit_error_key:
+            st.session_state[limit_error_key] = False
     else:
-        st.session_state["_aud_limit_error"] = False
-
-    st.session_state.selected_audience_types = cur
-    # Signal tab-navigation guard (no st.rerun() — let the natural rerun proceed)
-    st.session_state["_ideas_rerun_trigger"] = True
-    return cur
-
-
-def _idea_type_change(opt_id: str):
-    """on_change callback for idea-type checkboxes. Enforces max-3 rule."""
-    st.session_state["_ideas_rerun_trigger"] = True
-    cb_key = f"idea_type_cb_{opt_id}"
-    is_checked = st.session_state.get(cb_key, False)
-    current = list(st.session_state.get("selected_idea_types", []))
-
-    if is_checked:
-        if len(current) >= 3:
-            st.session_state[cb_key] = False
-            st.session_state["_idea_limit_error"] = True
+        if exclusive_id and clicked_id == exclusive_id:
+            cur = [exclusive_id]
         else:
-            current.append(opt_id)
-            st.session_state.selected_idea_types = current
-            st.session_state["_idea_limit_error"] = False
-    else:
-        if opt_id in current:
-            current.remove(opt_id)
-        st.session_state.selected_idea_types = current
-        st.session_state["_idea_limit_error"] = False
+            if exclusive_id and exclusive_id in cur:
+                cur.remove(exclusive_id)
+            real = [x for x in cur if x != exclusive_id]
+            if max_select > 0 and len(real) >= max_select:
+                if limit_error_key:
+                    st.session_state[limit_error_key] = True
+                st.session_state[state_key] = cur
+                st.session_state["_ideas_rerun_trigger"] = True
+                st.rerun()
+                return
+            if limit_error_key:
+                st.session_state[limit_error_key] = False
+            cur.append(clicked_id)
+
+    st.session_state[state_key] = cur
+    st.session_state["_ideas_rerun_trigger"] = True
+    st.rerun()
 
 
 def _render_toggle_group(label: str, options: list, selected_key: str,
@@ -2470,48 +2489,62 @@ with tab_ideas:
     ניתן לבחור עד 2 קטגוריות
   </span>
 </div>""", unsafe_allow_html=True)
-    # Initialise checkbox keys from selected_audience_types (only when not yet set)
-    _prev_aud_sel = list(st.session_state.get("selected_audience_types", []))
-    for _oid, _ in AUDIENCE_TYPE_OPTIONS:
-        _ck = f"aud_type_cb_{_oid}"
-        if _ck not in st.session_state:
-            st.session_state[_ck] = _oid in _prev_aud_sel
-    # Render checkboxes without on_change to avoid interfering with generation reruns
-    for _oid, _olabel in AUDIENCE_TYPE_OPTIONS:
-        st.checkbox(_olabel, key=f"aud_type_cb_{_oid}")
-    # Enforce rules inline (max-2, Not-Sure exclusive) — no callback needed
-    _aud_type_change_inline(_prev_aud_sel)
+    _card_select(
+        AUDIENCE_TYPE_OPTIONS,
+        state_key="selected_audience_types",
+        max_select=2,
+        exclusive_id="not_sure",
+        limit_error_key="_aud_limit_error",
+        ncols=0,
+    )
     if st.session_state.get("_aud_limit_error"):
-        st.warning("⚠️ ניתן לבחור עד 2 קטגוריות בלבד. כדי לבחור אפשרות נוספת, בטל סימון של אחת הנבחרות.")
+        st.warning("⚠️ ניתן לבחור עד 2 קטגוריות בלבד. בטל סימון אחת כדי לבחור אחרת.")
     st.markdown('<div style="height:0.5rem"></div>', unsafe_allow_html=True)
 
-    # ── שלב 1: תחום ──
-    col_domain, col_confirm = st.columns([5, 1])
-    with col_domain:
+    # ── שלב 1: תחום + אתר ──
+    st.markdown("""
+<div style="direction:rtl; text-align:right; margin-bottom:0.4rem; margin-top:0.5rem;">
+  <span style="font-size:1.2rem; font-weight:700; color:rgba(255,255,255,0.9);">
+    🔍 על מה תרצו לייצר תוכן?
+  </span>
+</div>""", unsafe_allow_html=True)
+    col_d, col_w, col_ok = st.columns([3, 3, 1])
+    with col_d:
         domain_input = st.text_input(
-            "מהו התחום שלך?",
-            placeholder="למשל: פיזיותרפיה, שיווק דיגיטלי, בישול בריא...",
+            "תחום / נושא",
+            placeholder="למשל: פיזיותרפיה, שיווק דיגיטלי...",
             key="ideas_domain_input",
         )
-    with col_confirm:
+    with col_w:
+        website_input = st.text_input(
+            "כתובת אתר (URL)",
+            placeholder="למשל: www.mysite.co.il",
+            key="ideas_website_input",
+        )
+    with col_ok:
         st.markdown('<div style="height:1.75rem"></div>', unsafe_allow_html=True)
         confirm_domain_btn = st.button("אישור ◀", key="confirm_domain_btn", use_container_width=True)
 
-    # Auto-generate on input commit (Enter/blur) OR explicit button click.
+    _d_raw = (domain_input or "").strip()
+    _w_raw = (website_input or "").strip()
+    effective_input = "; ".join(filter(None, [_d_raw, _w_raw]))
+
+    if confirm_domain_btn and not effective_input:
+        st.error("אנא הזינו תחום, נושא, או שניהם כדי להמשיך.")
+
     # Two-rerun strategy: Rerun 1 → navigate to Ideas tab; Rerun 2 → run the API call.
-    # This prevents Streamlit from flashing the Creation tab during the spinner.
-    _should_generate = domain_input and (
-        domain_input != st.session_state.get("_last_ideas_domain", "") or confirm_domain_btn
+    _should_generate = bool(effective_input) and (
+        effective_input != st.session_state.get("_last_ideas_domain", "") or confirm_domain_btn
     )
     if _should_generate:
-        # Store intent and reset state, then hand off to a dedicated rerun
-        st.session_state["_last_ideas_domain"] = domain_input
-        st.session_state["_pending_audience_gen"] = domain_input
+        st.session_state["_last_ideas_domain"] = effective_input
+        st.session_state["_pending_audience_gen"] = effective_input
         st.session_state.target_audiences = []
+        st.session_state.selected_ai_audiences = []
         st.session_state.ideas_table = {}
         st.session_state.ideas_tables_history = []
         st.session_state.ideas_table_idx = 0
-        st.session_state["_jump_to_ideas"] = True  # nav trigger fires at top of next rerun
+        st.session_state["_jump_to_ideas"] = True
         st.rerun()
 
     # Rerun 2: tab is already active, now run the pending API call
@@ -2549,17 +2582,24 @@ with tab_ideas:
     # ── שלב 2: בחירת קהל יעד ──
     if st.session_state.target_audiences:
         st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
-        st.markdown('<div class="section-label">👥 סוג הקהל שלך</div>', unsafe_allow_html=True)
+        st.markdown("""
+<div style="direction:rtl; text-align:right; margin-bottom:0.4rem;">
+  <span style="font-size:1.3rem; font-weight:800; color:white;">👥 בחרו קהל יעד</span>
+</div>""", unsafe_allow_html=True)
 
-        # Checkboxes — two columns
-        checked_audiences = []
-        audience_list = st.session_state.target_audiences
-        aud_col1, aud_col2 = st.columns(2)
-        for idx, aud in enumerate(audience_list):
-            col = aud_col1 if idx % 2 == 0 else aud_col2
-            with col:
-                if st.checkbox(aud, key=f"aud_cb_{idx}", on_change=_ideas_tab_action):
-                    checked_audiences.append(aud)
+        _aud_opts = [(f"ai_{i}", aud) for i, aud in enumerate(st.session_state.target_audiences)]
+        _card_select(
+            _aud_opts,
+            state_key="selected_ai_audiences",
+            max_select=0,
+            ncols=2,
+        )
+        _sel_ai = st.session_state.get("selected_ai_audiences", [])
+        checked_audiences = [
+            st.session_state.target_audiences[int(k.split("_", 1)[1])]
+            for k in _sel_ai
+            if k.startswith("ai_") and int(k.split("_", 1)[1]) < len(st.session_state.target_audiences)
+        ]
 
         custom_audience = st.text_input(
             "✏️ קהל יעד ספציפי אחר (אופציונלי)",
@@ -2569,7 +2609,6 @@ with tab_ideas:
 
         final_audience_list = checked_audiences + ([custom_audience.strip()] if custom_audience.strip() else [])
 
-        # Display selected summary
         if final_audience_list:
             st.caption(f"נבחרו: {', '.join(final_audience_list)}")
 
@@ -2581,21 +2620,20 @@ with tab_ideas:
     ניתן לבחור עד 3 סוגים
   </span>
 </div>""", unsafe_allow_html=True)
-            for _ioid, _ in IDEA_TYPE_OPTIONS:
-                _ick = f"idea_type_cb_{_ioid}"
-                if _ick not in st.session_state:
-                    _default_sel = st.session_state.get("selected_idea_types", ["emotional", "practical"])
-                    st.session_state[_ick] = _ioid in _default_sel
-            for _ioid, _iolabel in IDEA_TYPE_OPTIONS:
-                st.checkbox(_iolabel, key=f"idea_type_cb_{_ioid}",
-                            on_change=_idea_type_change, args=(_ioid,))
+            _card_select(
+                IDEA_TYPE_OPTIONS,
+                state_key="selected_idea_types",
+                max_select=3,
+                limit_error_key="_idea_limit_error",
+                ncols=0,
+            )
             if st.session_state.get("_idea_limit_error"):
-                st.warning("⚠️ ניתן לבחור עד 3 סוגים בלבד. כדי לבחור סוג נוסף, בטל סימון של אחד הנבחרים.")
+                st.warning("⚠️ ניתן לבחור עד 3 סוגים בלבד. בטל סימון אחד כדי לבחור אחר.")
             st.markdown('<div style="height:0.4rem"></div>', unsafe_allow_html=True)
 
             if st.button("📊 צור טבלת רעיונות", key="gen_ideas_table_btn", use_container_width=True):
                 st.session_state["_pending_table_gen"] = {
-                    "domain":     domain_input,
+                    "domain":     effective_input,
                     "audience":   ", ".join(final_audience_list),
                     "mode":       "new",
                     "idea_types": st.session_state.get("selected_idea_types") or ["emotional", "practical"],
@@ -2603,7 +2641,7 @@ with tab_ideas:
                 st.session_state["_jump_to_ideas"] = True
                 st.rerun()
         else:
-            st.info("סמן לפחות קהל יעד אחד כדי להמשיך")
+            st.info("בחרו לפחות קהל יעד אחד כדי להמשיך")
 
     # ── שלב 3: טבלת רעיונות ──
     if st.session_state.ideas_tables_history:
@@ -2691,9 +2729,9 @@ with tab_ideas:
                 st.rerun()
         with col_more:
             if st.button("➕ צור עוד 30 רעיונות", key="more_ideas_btn", use_container_width=True):
-                if domain_input and (final_audience_list if st.session_state.target_audiences else domain_input):
+                if effective_input and (final_audience_list if st.session_state.target_audiences else effective_input):
                     st.session_state["_pending_table_gen"] = {
-                        "domain":     domain_input,
+                        "domain":     effective_input,
                         "audience":   ", ".join(final_audience_list) if st.session_state.target_audiences else "",
                         "mode":       "append",
                         "idea_types": st.session_state.get("selected_idea_types") or ["emotional", "practical"],
