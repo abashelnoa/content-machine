@@ -165,6 +165,14 @@ ASPECT_RATIOS = {
     "4:5 לרוחב (Landscape)":    "5:4",
 }
 
+IDEA_TYPE_CATEGORY_MAP = {
+    "emotional":  ["מוטיבציות", "חששות", "תובנות שאנשים לא יודעים"],
+    "practical":  ["שימושים ומשימות", "חיסכון בזמן", "לפני ואחרי (עם/בלי)"],
+    "mistakes":   ["טעויות נפוצות", "מיתוסים", "גישות שגויות"],
+    "authority":  ["תובנות מומחה", "ידע מקצועי מתקדם", "בידול מקצועי"],
+    "comparison": ["לפני מול אחרי", "ישן מול חדש", "בלי מול עם"],
+}
+
 # Human-readable orientation hint for each ratio (used in prompt)
 _AR_HINT = {
     "1:1":  "square format — equal width and height",
@@ -627,11 +635,26 @@ Rules:
     raise last_exc
 
 
-def generate_target_audiences(domain: str, language: str = "עברית") -> list[str]:
+def generate_target_audiences(domain: str, language: str = "עברית",
+                               audience_types: list | None = None) -> list[str]:
     """מייצר 10 קהלי יעד מתאימים לתחום."""
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
-    prompt = f"""Generate 10 specific target audiences for content in the domain of: {domain}
+    _type_labels = {
+        "individuals": "individuals / private people",
+        "small_biz":   "small business owners",
+        "companies":   "companies and organizations",
+        "nonprofits":  "nonprofits and public sector",
+    }
+    audience_filter = ""
+    if audience_types and audience_types != ["not_sure"]:
+        types_str = ", ".join(
+            _type_labels.get(t, t) for t in audience_types if t != "not_sure"
+        )
+        if types_str:
+            audience_filter = f"\nFocus specifically on audiences that are: {types_str}"
+
+    prompt = f"""Generate 10 specific target audiences for content in the domain of: {domain}{audience_filter}
 
 Output language: {language}
 
@@ -657,25 +680,38 @@ Format: ["audience 1", "audience 2", ...]"""
     return []
 
 
-def generate_ideas_table(domain: str, audience: str, language: str = "עברית") -> dict:
+def generate_ideas_table(domain: str, audience: str, language: str = "עברית",
+                          idea_types: list | None = None) -> dict:
     """
-    מייצר טבלת רעיונות: 10 מוטיבציות, 10 חששות, 10 דברים שאנשים לא יודעים.
-    מחזיר dict: {"מוטיבציות": [...], "חששות": [...], "דברים שאנשים לא יודעים": [...]}
+    מייצר טבלת רעיונות לפי סוגי הרעיונות שנבחרו.
+    מחזיר dict שמפתחותיו שמות הקטגוריות וערכיו רשימות של 10 רעיונות כל אחת.
     """
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+
+    effective_types = idea_types if idea_types else ["emotional", "practical"]
+    all_categories: list[str] = []
+    for t in effective_types:
+        for cat in IDEA_TYPE_CATEGORY_MAP.get(t, []):
+            if cat not in all_categories:
+                all_categories.append(cat)
+
+    cats_instruction = "\n".join(f"- {cat} (10 רעיונות)" for cat in all_categories)
+    json_template_lines = [
+        f'  "{cat}": ["רעיון 1", "רעיון 2", "רעיון 3", "רעיון 4", "רעיון 5", '
+        f'"רעיון 6", "רעיון 7", "רעיון 8", "רעיון 9", "רעיון 10"]'
+        for cat in all_categories
+    ]
+    json_template = "{\n" + ",\n".join(json_template_lines) + "\n}"
 
     prompt = f"""אני רוצה שתהיה בתפקיד של מומחה לכתיבת תוכן עבור רשתות חברתיות וכתיבה באופן כללי כגון פוסטים, בלוגים, מאמרים וכו'. אני עוסק בתחום {domain}.
 
 אני רוצה רעיונות שיעניינו את הקהל שלי שהוא {audience}.
 
-אני רוצה שתיתן לי עשר מוטיבציות, עשר חששות, ועשרה דברים שאנשים שאינם מהתחום לא יודעים על התחום הספציפי שלי.
+אני רוצה שתיתן לי 10 רעיונות לכל אחת מהקטגוריות הבאות:
+{cats_instruction}
 
 החזר את המידע כ-JSON בלבד, ללא טקסט נוסף, בפורמט הבא:
-{{
-  "מוטיבציות": ["רעיון 1", "רעיון 2", "רעיון 3", "רעיון 4", "רעיון 5", "רעיון 6", "רעיון 7", "רעיון 8", "רעיון 9", "רעיון 10"],
-  "חששות": ["רעיון 1", "רעיון 2", "רעיון 3", "רעיון 4", "רעיון 5", "רעיון 6", "רעיון 7", "רעיון 8", "רעיון 9", "רעיון 10"],
-  "דברים שאנשים לא יודעים": ["רעיון 1", "רעיון 2", "רעיון 3", "רעיון 4", "רעיון 5", "רעיון 6", "רעיון 7", "רעיון 8", "רעיון 9", "רעיון 10"]
-}}
+{json_template}
 
 שפת הפלט: {language}"""
 

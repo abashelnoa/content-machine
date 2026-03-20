@@ -16,7 +16,24 @@ from PIL import Image
 
 import data_loader
 import generator
-from generator import ASPECT_RATIOS, CONTENT_TYPES, LANGUAGES, PRESET_STYLES, MARKETING_FRAMEWORKS
+from generator import (ASPECT_RATIOS, CONTENT_TYPES, LANGUAGES, PRESET_STYLES,
+                        MARKETING_FRAMEWORKS, IDEA_TYPE_CATEGORY_MAP)
+
+# ── Multi-select options for the Ideas Generator ──────────────────────────────
+AUDIENCE_TYPE_OPTIONS = [
+    ("individuals", "יחידים"),
+    ("small_biz",   "עסקים קטנים"),
+    ("companies",   "חברות וארגונים"),
+    ("nonprofits",  "מגזר ציבורי ועמותות"),
+    ("not_sure",    "לא בטוח"),
+]
+IDEA_TYPE_OPTIONS = [
+    ("emotional",  "רגשי"),
+    ("practical",  "פרקטי"),
+    ("mistakes",   "טעויות"),
+    ("authority",  "סמכות"),
+    ("comparison", "השוואות"),
+]
 
 load_dotenv()
 
@@ -1125,6 +1142,8 @@ def init_state():
         "ideas_table": {},
         "ideas_tables_history": [],
         "ideas_table_idx": 0,
+        "selected_audience_types": [],
+        "selected_idea_types": ["emotional", "practical"],
         "generated_style_guide": "",
         "style_upload_key": 0,
         "preset_style": "auto",
@@ -1214,6 +1233,47 @@ def _show_ideas_modal(post_ideas: dict):
 # Callback used by Ideas-tab widgets (checkboxes, etc.) to signal "stay on Ideas tab"
 def _ideas_tab_action():
     st.session_state["_ideas_rerun_trigger"] = True
+
+
+def _render_toggle_group(label: str, options: list, selected_key: str,
+                          max_select: int, exclusive_id: str | None = None):
+    """Renders a labeled row of CSS-styled toggle buttons stored in session_state[selected_key]."""
+    selected = st.session_state.get(selected_key, [])
+    css_parts = []
+    for opt_id, _ in options:
+        is_sel = opt_id in selected
+        bg = ("linear-gradient(135deg,rgba(124,58,237,0.75),rgba(59,130,246,0.70))"
+              if is_sel else "rgba(255,255,255,0.05)")
+        border = "rgba(167,139,250,0.80)" if is_sel else "rgba(255,255,255,0.15)"
+        css_parts.append(
+            f'div[data-testid="stButton"]>button#tgl_{selected_key}_{opt_id}{{'
+            f'background:{bg}!important;'
+            f'border:1.5px solid {border}!important;'
+            f'color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;'
+            f'border-radius:10px!important;font-size:0.84rem!important;'
+            f'padding:0.38rem 0.5rem!important;transition:all 0.15s!important;}}'
+        )
+    st.markdown(f'<div class="section-label">{label}</div>', unsafe_allow_html=True)
+    st.markdown(f"<style>{''.join(css_parts)}</style>", unsafe_allow_html=True)
+    cols = st.columns(len(options))
+    for i, (opt_id, opt_label) in enumerate(options):
+        with cols[i]:
+            if st.button(opt_label, key=f"tgl_{selected_key}_{opt_id}",
+                         use_container_width=True):
+                cur = list(st.session_state.get(selected_key, []))
+                if opt_id in cur:
+                    cur.remove(opt_id)
+                else:
+                    if exclusive_id and opt_id == exclusive_id:
+                        cur = [exclusive_id]
+                    else:
+                        if exclusive_id and exclusive_id in cur:
+                            cur.remove(exclusive_id)
+                        if len(cur) < max_select:
+                            cur.append(opt_id)
+                st.session_state[selected_key] = cur
+                st.session_state["_ideas_rerun_trigger"] = True
+                st.rerun()
 
 
 def _safe_filename(s) -> str:
@@ -2346,6 +2406,16 @@ with tab_ideas:
 
     st.markdown('<div class="section-label">💡 מחולל רעיונות לתוכן</div>', unsafe_allow_html=True)
 
+    # ── למי אתם פונים? ──
+    _render_toggle_group(
+        "👥 למי אתם פונים?",
+        AUDIENCE_TYPE_OPTIONS,
+        selected_key="selected_audience_types",
+        max_select=2,
+        exclusive_id="not_sure",
+    )
+    st.markdown('<div style="height:0.4rem"></div>', unsafe_allow_html=True)
+
     # ── שלב 1: תחום ──
     col_domain, col_confirm = st.columns([5, 1])
     with col_domain:
@@ -2382,7 +2452,8 @@ with tab_ideas:
         with st.spinner("מייצר קהלי יעד..."):
             try:
                 audiences = generator.generate_target_audiences(
-                    _pending_domain, st.session_state.language
+                    _pending_domain, st.session_state.language,
+                    audience_types=st.session_state.get("selected_audience_types") or None,
                 )
                 st.session_state.target_audiences = audiences
             except Exception as e:
@@ -2395,7 +2466,8 @@ with tab_ideas:
         with st.spinner(_spinner_msg):
             try:
                 table = generator.generate_ideas_table(
-                    _ptg["domain"], _ptg["audience"], st.session_state.language
+                    _ptg["domain"], _ptg["audience"], st.session_state.language,
+                    idea_types=_ptg.get("idea_types"),
                 )
                 st.session_state.ideas_table = table
                 st.session_state.ideas_tables_history.append(table)
@@ -2432,11 +2504,22 @@ with tab_ideas:
         if final_audience_list:
             st.caption(f"נבחרו: {', '.join(final_audience_list)}")
 
+            # ── סוג הרעיונות שאני רוצה ──
+            _render_toggle_group(
+                "💡 סוג הרעיונות שאני רוצה",
+                IDEA_TYPE_OPTIONS,
+                selected_key="selected_idea_types",
+                max_select=3,
+                exclusive_id=None,
+            )
+            st.markdown('<div style="height:0.4rem"></div>', unsafe_allow_html=True)
+
             if st.button("📊 צור טבלת רעיונות", key="gen_ideas_table_btn", use_container_width=True):
                 st.session_state["_pending_table_gen"] = {
-                    "domain": domain_input,
-                    "audience": ", ".join(final_audience_list),
-                    "mode": "new",
+                    "domain":     domain_input,
+                    "audience":   ", ".join(final_audience_list),
+                    "mode":       "new",
+                    "idea_types": st.session_state.get("selected_idea_types") or ["emotional", "practical"],
                 }
                 st.session_state["_jump_to_ideas"] = True
                 st.rerun()
@@ -2473,9 +2556,27 @@ with tab_ideas:
 
         # Render each category as a plain-text card
         _cat_meta = {
-            "מוטיבציות":                  ("🎯", "rgba(52,211,153,0.15)",  "rgba(52,211,153,0.35)"),
-            "חששות":                      ("😟", "rgba(239,68,68,0.1)",    "rgba(239,68,68,0.3)"),
-            "דברים שאנשים לא יודעים":     ("💡", "rgba(251,191,36,0.1)",   "rgba(251,191,36,0.3)"),
+            # emotional (legacy + new names)
+            "מוטיבציות":               ("🎯", "rgba(52,211,153,0.15)",  "rgba(52,211,153,0.35)"),
+            "חששות":                   ("😟", "rgba(239,68,68,0.10)",   "rgba(239,68,68,0.30)"),
+            "דברים שאנשים לא יודעים":  ("💡", "rgba(251,191,36,0.10)",  "rgba(251,191,36,0.30)"),
+            "תובנות שאנשים לא יודעים": ("💡", "rgba(251,191,36,0.10)",  "rgba(251,191,36,0.30)"),
+            # practical
+            "שימושים ומשימות":          ("⚙️", "rgba(59,130,246,0.12)",  "rgba(59,130,246,0.30)"),
+            "חיסכון בזמן":              ("⏱️", "rgba(16,185,129,0.12)",  "rgba(16,185,129,0.30)"),
+            "לפני ואחרי (עם/בלי)":     ("🔄", "rgba(139,92,246,0.12)",  "rgba(139,92,246,0.30)"),
+            # mistakes
+            "טעויות נפוצות":            ("❌", "rgba(239,68,68,0.12)",   "rgba(239,68,68,0.30)"),
+            "מיתוסים":                  ("🚫", "rgba(249,115,22,0.12)",  "rgba(249,115,22,0.30)"),
+            "גישות שגויות":             ("⚠️", "rgba(234,179,8,0.12)",   "rgba(234,179,8,0.30)"),
+            # authority
+            "תובנות מומחה":             ("🏆", "rgba(168,85,247,0.12)",  "rgba(168,85,247,0.30)"),
+            "ידע מקצועי מתקדם":        ("🔬", "rgba(14,165,233,0.12)",  "rgba(14,165,233,0.30)"),
+            "בידול מקצועי":             ("⭐", "rgba(245,158,11,0.12)",  "rgba(245,158,11,0.30)"),
+            # comparison
+            "לפני מול אחרי":            ("🔀", "rgba(99,102,241,0.12)",  "rgba(99,102,241,0.30)"),
+            "ישן מול חדש":              ("🆚", "rgba(236,72,153,0.12)",  "rgba(236,72,153,0.30)"),
+            "בלי מול עם":               ("✨", "rgba(52,211,153,0.12)",  "rgba(52,211,153,0.30)"),
         }
         for category, ideas_list in current_table.items():
             emoji, bg_tint, border_tint = _cat_meta.get(category, ("📌", "rgba(255,255,255,0.03)", "rgba(255,255,255,0.07)"))
@@ -2513,9 +2614,10 @@ with tab_ideas:
             if st.button("➕ צור עוד 30 רעיונות", key="more_ideas_btn", use_container_width=True):
                 if domain_input and (final_audience_list if st.session_state.target_audiences else domain_input):
                     st.session_state["_pending_table_gen"] = {
-                        "domain": domain_input,
-                        "audience": ", ".join(final_audience_list) if st.session_state.target_audiences else "",
-                        "mode": "append",
+                        "domain":     domain_input,
+                        "audience":   ", ".join(final_audience_list) if st.session_state.target_audiences else "",
+                        "mode":       "append",
+                        "idea_types": st.session_state.get("selected_idea_types") or ["emotional", "practical"],
                     }
                     st.session_state["_jump_to_ideas"] = True
                     st.rerun()
