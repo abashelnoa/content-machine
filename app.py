@@ -1144,6 +1144,7 @@ def init_state():
         "ideas_table_idx": 0,
         "selected_audience_types": [],
         "selected_idea_types": ["emotional", "practical"],
+        "_aud_limit_error": False,
         "generated_style_guide": "",
         "style_upload_key": 0,
         "preset_style": "auto",
@@ -1233,6 +1234,42 @@ def _show_ideas_modal(post_ideas: dict):
 # Callback used by Ideas-tab widgets (checkboxes, etc.) to signal "stay on Ideas tab"
 def _ideas_tab_action():
     st.session_state["_ideas_rerun_trigger"] = True
+
+
+def _aud_type_change(opt_id: str):
+    """on_change callback for audience-type checkboxes.
+    Enforces max-2 rule and the 'Not Sure' exclusive behaviour."""
+    st.session_state["_ideas_rerun_trigger"] = True
+    cb_key = f"aud_type_cb_{opt_id}"
+    is_checked = st.session_state.get(cb_key, False)
+    current = list(st.session_state.get("selected_audience_types", []))
+
+    if is_checked:
+        if opt_id == "not_sure":
+            # "Not Sure" clears every other option
+            for oid, _ in AUDIENCE_TYPE_OPTIONS:
+                if oid != "not_sure":
+                    st.session_state[f"aud_type_cb_{oid}"] = False
+            st.session_state.selected_audience_types = ["not_sure"]
+            st.session_state["_aud_limit_error"] = False
+        else:
+            # Selecting a real category → deselect "Not Sure" if present
+            if "not_sure" in current:
+                current.remove("not_sure")
+                st.session_state["aud_type_cb_not_sure"] = False
+            if len(current) >= 2:
+                # At the limit — revert this checkbox and show error
+                st.session_state[cb_key] = False
+                st.session_state["_aud_limit_error"] = True
+            else:
+                current.append(opt_id)
+                st.session_state.selected_audience_types = current
+                st.session_state["_aud_limit_error"] = False
+    else:
+        if opt_id in current:
+            current.remove(opt_id)
+        st.session_state.selected_audience_types = current
+        st.session_state["_aud_limit_error"] = False
 
 
 def _render_toggle_group(label: str, options: list, selected_key: str,
@@ -2399,17 +2436,23 @@ with tab_ideas:
 
     # ── למי אתם פונים? ──
     st.markdown("""
-<div style="direction:rtl; text-align:right; margin-bottom:0.55rem; margin-top:0.2rem;">
+<div style="direction:rtl; text-align:right; margin-bottom:0.35rem; margin-top:0.2rem;">
   <span style="font-size:1.6rem; font-weight:800; color:white; letter-spacing:-0.015em;">👥 למי אתם פונים?</span>
+  <span style="display:block; font-size:0.82rem; color:rgba(167,139,250,0.85); margin-top:0.2rem; font-weight:500;">
+    ניתן לבחור עד 2 קטגוריות
+  </span>
 </div>""", unsafe_allow_html=True)
-    _render_toggle_group(
-        "",
-        AUDIENCE_TYPE_OPTIONS,
-        selected_key="selected_audience_types",
-        max_select=2,
-        exclusive_id="not_sure",
-    )
-    st.markdown('<div style="height:0.4rem"></div>', unsafe_allow_html=True)
+    # Initialise checkbox keys from selected_audience_types (only when not yet set)
+    for _oid, _ in AUDIENCE_TYPE_OPTIONS:
+        _ck = f"aud_type_cb_{_oid}"
+        if _ck not in st.session_state:
+            st.session_state[_ck] = _oid in st.session_state.get("selected_audience_types", [])
+    for _oid, _olabel in AUDIENCE_TYPE_OPTIONS:
+        st.checkbox(_olabel, key=f"aud_type_cb_{_oid}",
+                    on_change=_aud_type_change, args=(_oid,))
+    if st.session_state.get("_aud_limit_error"):
+        st.warning("⚠️ ניתן לבחור עד 2 קטגוריות בלבד. כדי לבחור אפשרות נוספת, בטל סימון של אחת הנבחרות.")
+    st.markdown('<div style="height:0.5rem"></div>', unsafe_allow_html=True)
 
     # ── שלב 1: תחום ──
     col_domain, col_confirm = st.columns([5, 1])
