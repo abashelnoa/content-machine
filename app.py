@@ -1185,6 +1185,7 @@ def init_state():
         "selected_ai_audiences": [],
         "_aud_limit_error": False,
         "_idea_limit_error": False,
+        "_ai_aud_limit_error": False,
         "ideas_website_input": "",
         "generated_style_guide": "",
         "style_upload_key": 0,
@@ -2507,7 +2508,7 @@ with tab_visual:
 with tab_ideas:
     import pandas as pd
 
-    # ── Section 1: Title + domain inputs (centered) ──────────────────────────
+    # ══ STEP 1 — Domain / URL input ════════════════════════════════════════════
     _, _hc, _ = st.columns([1, 5, 1])
     with _hc:
         st.markdown("""
@@ -2533,18 +2534,12 @@ with tab_ideas:
                 placeholder="www.example.com",
                 key="ideas_website_input",
             )
-        confirm_domain_btn = st.button("המשך ←", key="confirm_domain_btn")
 
     _d_raw = (domain_input or "").strip()
     _w_raw = (website_input or "").strip()
     effective_input = "; ".join(filter(None, [_d_raw, _w_raw]))
 
-    if confirm_domain_btn and not effective_input:
-        _, _ec, _ = st.columns([1, 5, 1])
-        with _ec:
-            st.error("אנא הזינו תחום, כתובת אתר, או שניהם כדי להמשיך.")
-
-    # ── Section 2: Audience type cards (centered) ─────────────────────────────
+    # ══ STEP 2 — Audience categories ═══════════════════════════════════════════
     _, _ac, _ = st.columns([1, 6, 1])
     with _ac:
         st.markdown("""
@@ -2565,17 +2560,30 @@ with tab_ideas:
             ncols=0,
         )
         if st.session_state.get("_aud_limit_error"):
-            st.caption("⚠️ ניתן לבחור עד 2 קטגוריות")
+            st.warning("⚠️ ניתן לבחור עד 2 קטגוריות. כדי לבחור אפשרות נוספת, בטל סימון של אחת הנבחרות.")
 
-    # ── Two-rerun strategy: Rerun 1 → nav; Rerun 2 → API call ────────────────
-    _should_generate = bool(effective_input) and (
-        effective_input != st.session_state.get("_last_ideas_domain", "") or confirm_domain_btn
-    )
+    # ══ STEP 3 — Continue button (triggers audience generation) ════════════════
+    _, _cc, _ = st.columns([1, 5, 1])
+    with _cc:
+        if not effective_input:
+            st.caption("הזינו תחום או כתובת אתר כדי להמשיך")
+        confirm_domain_btn = st.button(
+            "המשך →",
+            key="confirm_domain_btn",
+            type="primary",
+            use_container_width=True,
+            disabled=not bool(effective_input),
+        )
+
+    # ── Trigger logic: ONLY fires on explicit Continue click (no auto-trigger).
+    # Auto-trigger caused st.rerun() during audience card clicks → tab reset to Create.
+    _should_generate = confirm_domain_btn and bool(effective_input)
     if _should_generate:
         st.session_state["_last_ideas_domain"] = effective_input
         st.session_state["_pending_audience_gen"] = effective_input
         st.session_state.target_audiences = []
         st.session_state.selected_ai_audiences = []
+        st.session_state["_ai_aud_limit_error"] = False
         st.session_state.ideas_table = {}
         st.session_state.ideas_tables_history = []
         st.session_state.ideas_table_idx = 0
@@ -2613,47 +2621,90 @@ with tab_ideas:
         st.session_state["_jump_to_ideas"] = True
         st.rerun()
 
-    # ── Section 3: AI-generated audience cards ────────────────────────────────
+    # ══ STEP 4 — Generated target audience cards (max 4) ══════════════════════
     if st.session_state.target_audiences:
         st.markdown('<div class="custom-divider"></div>', unsafe_allow_html=True)
         _, _auc, _ = st.columns([1, 6, 1])
         with _auc:
             st.markdown("""
-<div style="direction:rtl;text-align:right;margin-bottom:0.5rem;">
+<div style="direction:rtl;text-align:right;margin-bottom:0.45rem;">
   <div style="font-size:1.3rem;font-weight:600;color:#ffffff;">
     בחרו קהל יעד
+  </div>
+  <div style="font-size:0.92rem;color:rgba(255,255,255,0.65);margin-top:0.18rem;">
+    בחרו עד 4 קהלי יעד
   </div>
 </div>""", unsafe_allow_html=True)
             _aud_opts = [(f"ai_{i}", aud) for i, aud in enumerate(st.session_state.target_audiences)]
             _card_select(
                 _aud_opts,
                 state_key="selected_ai_audiences",
-                max_select=0,
+                max_select=4,
                 ncols=2,
+                limit_error_key="_ai_aud_limit_error",
             )
-            _sel_ai = st.session_state.get("selected_ai_audiences", [])
-            checked_audiences = [
-                st.session_state.target_audiences[int(k.split("_", 1)[1])]
-                for k in _sel_ai
-                if k.startswith("ai_") and int(k.split("_", 1)[1]) < len(st.session_state.target_audiences)
-            ]
+            if st.session_state.get("_ai_aud_limit_error"):
+                st.warning("⚠️ ניתן לבחור עד 4 קהלי יעד.")
             custom_audience = st.text_input(
                 "קהל יעד ספציפי (אופציונלי)",
                 key="custom_audience",
                 placeholder="למשל: גברים גמלאים מעל גיל 65",
             )
 
+        _sel_ai = st.session_state.get("selected_ai_audiences", [])
+        checked_audiences = [
+            st.session_state.target_audiences[int(k.split("_", 1)[1])]
+            for k in _sel_ai
+            if k.startswith("ai_") and int(k.split("_", 1)[1]) < len(st.session_state.target_audiences)
+        ]
         final_audience_list = checked_audiences + ([custom_audience.strip()] if custom_audience.strip() else [])
 
         if final_audience_list:
-            # ── Section 4: Idea type cards ────────────────────────────────────
+            # ══ STEP 5 — Smart summary ════════════════════════════════════════
+            _aud_type_labels = {oid: lbl for oid, lbl in AUDIENCE_TYPE_OPTIONS}
+            _sel_aud_types = [a for a in st.session_state.get("selected_audience_types", []) if a != "not_sure"]
+            _aud_type_str = " ו".join(_aud_type_labels.get(a, a) for a in _sel_aud_types)
+            _domain_display = _d_raw or _w_raw or effective_input
+            _audience_str = ", ".join(final_audience_list[:3])
+            if len(final_audience_list) > 3:
+                _audience_str += f" ועוד {len(final_audience_list) - 3}"
+            _targeting_line = f"פונים ל{_aud_type_str}" if _aud_type_str else ""
+
+            _, _sc, _ = st.columns([1, 6, 1])
+            with _sc:
+                _summary_lines = []
+                _summary_lines.append(
+                    f'אני מבין שאתם עוסקים בתחום '
+                    f'<strong style="color:#ffffff;">{_domain_display}</strong>'
+                    + (f', {_targeting_line}.' if _targeting_line else '.')
+                )
+                _summary_lines.append(
+                    f'בחרתם את קהלי היעד הבאים: '
+                    f'<strong style="color:#ffffff;">{_audience_str}</strong>.'
+                )
+                st.markdown(
+                    '<div style="direction:rtl;text-align:right;padding:1rem 1.2rem;'
+                    'background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.10);'
+                    'border-radius:10px;margin:1rem 0;line-height:1.9;">'
+                    + "".join(
+                        f'<div style="font-size:0.95rem;color:rgba(255,255,255,0.80);'
+                        f'margin-bottom:0.3rem;">{line}</div>'
+                        for line in _summary_lines
+                    )
+                    + '<div style="font-size:0.9rem;color:rgba(255,255,255,0.50);margin-top:0.5rem;">'
+                    'בהתאם לכך, הנה סוגי התוכן שאני ממליץ לכם:</div>'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+
+            # ══ STEP 6 — Idea type cards ══════════════════════════════════════
             _sel_aud = st.session_state.get("selected_audience_types", [])
             _recommended = list({t for a in _sel_aud for t in _AUD_IDEA_RECOMMEND.get(a, [])})
 
             _, _itc, _ = st.columns([1, 6, 1])
             with _itc:
                 st.markdown("""
-<div style="direction:rtl;text-align:right;margin-bottom:0.5rem;margin-top:0.9rem;">
+<div style="direction:rtl;text-align:right;margin-bottom:0.5rem;margin-top:0.4rem;">
   <div style="font-size:1.3rem;font-weight:600;color:#ffffff;">
     איזה סוג תוכן?
   </div>
@@ -2669,7 +2720,6 @@ with tab_ideas:
                     ncols=0,
                     recommended_ids=_recommended,
                 )
-                # Sublabels row below cards
                 _slcols = st.columns(len(IDEA_TYPE_OPTIONS))
                 for _ci, (_oid, _lbl, _sub) in enumerate(IDEA_TYPE_OPTIONS):
                     with _slcols[_ci]:
@@ -2679,10 +2729,10 @@ with tab_ideas:
                             unsafe_allow_html=True,
                         )
                 if st.session_state.get("_idea_limit_error"):
-                    st.caption("⚠️ ניתן לבחור עד 2 סוגים")
+                    st.warning("⚠️ ניתן לבחור עד 2 סוגים. כדי לבחור סוג נוסף, בטל סימון של אחד הנבחרים.")
                 st.markdown('<div style="height:0.6rem"></div>', unsafe_allow_html=True)
 
-            # ── Generate button (centered) ─────────────────────────────────────
+            # ══ STEP 7 — Generate Ideas Table button ══════════════════════════
             _, _gc, _ = st.columns([2, 2, 2])
             with _gc:
                 if st.button("צור טבלת רעיונות ←", key="gen_ideas_table_btn",
