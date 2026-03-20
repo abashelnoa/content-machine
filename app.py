@@ -388,15 +388,45 @@ button[data-testid="generate_post_btn"] {
     padding: 0.9rem 1rem !important;
     min-height: 54px !important;
 }
+/* ── Default button — dark flat card (tool-style, no gradient) ─────────────*/
 .stButton > button {
-    background: linear-gradient(135deg, #7c3aed, #3b82f6) !important;
-    color: white !important; border: none !important;
-    border-radius: 14px !important; font-weight: 600 !important;
-    font-size: 1rem !important; padding: 0.75rem 2rem !important;
-    transition: all 0.3s ease !important; letter-spacing: 0.02em !important;
-    box-shadow: 0 4px 20px rgba(124,58,237,0.35) !important;
+    background: #1e1f26 !important;
+    color: rgba(255,255,255,0.70) !important;
+    -webkit-text-fill-color: rgba(255,255,255,0.70) !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
+    border-radius: 10px !important;
+    font-weight: 450 !important;
+    font-size: 0.92rem !important;
+    padding: 0.62rem 1.1rem !important;
+    box-shadow: none !important;
+    transform: none !important;
+    transition: background 140ms ease, border-color 140ms ease, color 140ms ease !important;
+    letter-spacing: 0.01em !important;
 }
 .stButton > button:hover {
+    background: #242530 !important;
+    border-color: rgba(255,255,255,0.22) !important;
+    color: rgba(255,255,255,0.85) !important;
+    -webkit-text-fill-color: rgba(255,255,255,0.85) !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+/* ── Primary / CTA buttons — gradient (used for main generate actions) ────*/
+button[data-testid="baseButton-primary"],
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #7c3aed, #3b82f6) !important;
+    color: white !important;
+    -webkit-text-fill-color: white !important;
+    border: none !important;
+    border-radius: 14px !important;
+    font-weight: 600 !important;
+    font-size: 1rem !important;
+    padding: 0.75rem 2rem !important;
+    box-shadow: 0 4px 20px rgba(124,58,237,0.35) !important;
+    transition: all 0.25s ease !important;
+}
+button[data-testid="baseButton-primary"]:hover,
+.stButton > button[kind="primary"]:hover {
     transform: translateY(-2px) !important;
     box-shadow: 0 8px 30px rgba(124,58,237,0.5) !important;
 }
@@ -412,32 +442,6 @@ button[data-testid="generate_post_btn"] {
     background: linear-gradient(135deg, #7c3aed, #3b82f6) !important;
     transform: translateY(-1px) !important;
     box-shadow: 0 4px 20px rgba(124,58,237,0.4) !important;
-}
-/* ── Card-select buttons — dark tool-style cards ──────────────────────────
-   Base rule resets ALL crd_ buttons away from the global gradient.
-   Per-card CSS in _card_select() overrides selected vs unselected state. */
-[data-testid="stButton"] > button[id^="crd_"] {
-    background: #1e1f26 !important;
-    border: 1px solid rgba(255,255,255,0.11) !important;
-    box-shadow: none !important;
-    transform: none !important;
-    border-radius: 10px !important;
-    font-size: 0.94rem !important;
-    font-weight: 400 !important;
-    color: rgba(255,255,255,0.55) !important;
-    -webkit-text-fill-color: rgba(255,255,255,0.55) !important;
-    padding: 0.88rem 1.1rem !important;
-    min-height: 66px !important;
-    line-height: 1.35 !important;
-    transition: background 150ms ease, border-color 150ms ease, color 150ms ease !important;
-}
-[data-testid="stButton"] > button[id^="crd_"]:hover {
-    background: #242530 !important;
-    border-color: rgba(255,255,255,0.20) !important;
-    box-shadow: none !important;
-    transform: none !important;
-    color: rgba(255,255,255,0.72) !important;
-    -webkit-text-fill-color: rgba(255,255,255,0.72) !important;
 }
 /* ── כל הטקסטים לבנים ── */
 *, p, span, div, label, li {
@@ -1296,53 +1300,15 @@ def _card_select(
     cpp = ncols if ncols > 0 else n
     bpfx = f"crd_{state_key}"
 
-    css = ""
-    for item in options:
-        opt_id = item[0]
-        is_sel = opt_id in selected
-        # Selected: slightly lighter charcoal + brighter neutral border + inset top highlight
-        # Unselected: base dark charcoal (overrides global rule only when needed)
-        if is_sel:
-            bg   = "#28293a"
-            bd   = "1px solid rgba(255,255,255,0.32)"
-            clr  = "rgba(255,255,255,0.92)"
-            fw   = "500"
-            shad = "inset 0 1px 0 rgba(255,255,255,0.10)"
-            hbg  = "#2d2f3e"
-            hbd  = "rgba(255,255,255,0.38)"
-            hclr = "rgba(255,255,255,0.95)"
-        else:
-            bg   = "#1e1f26"
-            bd   = "1px solid rgba(255,255,255,0.11)"
-            clr  = "rgba(255,255,255,0.55)"
-            fw   = "400"
-            shad = "none"
-            hbg  = "#242530"
-            hbd  = "rgba(255,255,255,0.20)"
-            hclr = "rgba(255,255,255,0.72)"
-        css += (
-            f'div[data-testid="stButton"]>button#{bpfx}_{opt_id}{{'
-            f'background:{bg}!important;border:{bd}!important;'
-            f'box-shadow:{shad}!important;'
-            f'color:{clr}!important;-webkit-text-fill-color:{clr}!important;'
-            f'border-radius:10px!important;font-size:0.94rem!important;'
-            f'font-weight:{fw}!important;padding:0.88rem 1.1rem!important;'
-            f'min-height:66px!important;'
-            f'text-align:center!important;direction:rtl!important;'
-            f'line-height:1.35!important;white-space:normal!important;'
-            f'transition:background 150ms ease,border-color 150ms ease,color 150ms ease!important;}}'
-            f'div[data-testid="stButton"]>button#{bpfx}_{opt_id}:hover{{'
-            f'background:{hbg}!important;transform:none!important;'
-            f'box-shadow:{shad}!important;'
-            f'border-color:{hbd}!important;'
-            f'color:{hclr}!important;-webkit-text-fill-color:{hclr}!important;}}'
-        )
-        if recommended_ids and opt_id in recommended_ids:
-            css += (
-                f'div[data-testid="stButton"]>button#{bpfx}_{opt_id}::after{{'
-                f'content:" ✓";color:rgba(110,231,183,0.80);'
-                f'font-size:0.76em;margin-right:0.25em;}}'
-            )
+    # Global CSS: card sizing rules for all card-group buttons — applied once.
+    # Note: per-button ID selectors don't work in Streamlit (key ≠ HTML id).
+    # Selected state is communicated via ✓ prefix in the label (see button render below).
+    css = (
+        f'.stButton>button[data-bpfx="{bpfx}"],div[data-testid="stButton"]:has(~.stButton)>button{{'
+        f'min-height:66px!important;padding:0.82rem 1rem!important;'
+        f'font-size:0.93rem!important;line-height:1.4!important;'
+        f'white-space:normal!important;text-align:center!important;direction:rtl!important;}}'
+    )
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
     clicked_id = None
@@ -1351,8 +1317,13 @@ def _card_select(
         cols = st.columns(len(row))
         for ci, item in enumerate(row):
             opt_id = item[0]; label = item[1]
+            is_sel = opt_id in selected
+            # ✓ prefix = only reliable per-button visual diff in Streamlit without custom components
+            display_label = f"✓  {label}" if is_sel else f"   {label}"
+            rec_mark = "  ·" if (recommended_ids and opt_id in recommended_ids and not is_sel) else ""
             with cols[ci]:
-                if st.button(label, key=f"{bpfx}_{opt_id}", use_container_width=True):
+                if st.button(display_label + rec_mark, key=f"{bpfx}_{opt_id}",
+                             use_container_width=True):
                     clicked_id = opt_id
 
     if clicked_id is None:
@@ -1574,6 +1545,7 @@ with st.sidebar:
         use_container_width=True,
         disabled=_gen_disabled,
         key="generate_post_btn",
+        type="primary",
     )
     if generate_btn:
         st.session_state["_jump_to_create"] = True
@@ -1602,6 +1574,7 @@ with st.sidebar:
             use_container_width=True,
             key="bulk_generate_btn",
             disabled=_bulk_disabled,
+            type="primary",
         )
         if bulk_btn:
             st.session_state.bulk_queue = _bulk_source.copy()
@@ -2714,7 +2687,7 @@ with tab_ideas:
             _, _gc, _ = st.columns([2, 2, 2])
             with _gc:
                 if st.button("צור טבלת רעיונות ←", key="gen_ideas_table_btn",
-                              use_container_width=True):
+                              use_container_width=True, type="primary"):
                     st.session_state["_pending_table_gen"] = {
                         "domain":     effective_input,
                         "audience":   ", ".join(final_audience_list),
