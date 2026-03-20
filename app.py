@@ -995,11 +995,14 @@ _stc.html("""
 
             if (opt._lirazBound) return;
             opt._lirazBound = true;
+            opt._lirazHovered = false;
 
             opt.addEventListener('mouseenter', function() {
+                this._lirazHovered = true;
                 styleOption(this, BG_HOVER, TEXT_WHITE);
             });
             opt.addEventListener('mouseleave', function() {
+                this._lirazHovered = false;
                 var sel = this.getAttribute('aria-selected') === 'true';
                 styleOption(this, sel ? BG_SELECTED : BG_DEFAULT, sel ? TEXT_WHITE : TEXT_DEFAULT);
             });
@@ -1035,22 +1038,34 @@ _stc.html("""
         });
     }
 
-    /* Run on every DOM mutation so we catch dynamically rendered portals */
+    /* Run on DOM mutations — only process new nodes or aria-selected changes.
+       Never call applyDropdownStyles(pdoc) here: that overwrites hover inline
+       styles and causes options to stick in the wrong colour. */
     var dropdownObs = new MutationObserver(function(mutations) {
         mutations.forEach(function(m) {
+            /* Newly added nodes (dropdown opening, portal render) */
             m.addedNodes.forEach(function(node) {
                 if (node.nodeType !== 1) return;
                 applyDropdownStyles(node);
                 applyTooltipStyles(node);
                 applyInputStyles(node);
             });
+            /* aria-selected attribute flips (item selected / deselected) —
+               update only the specific element and only when not hovered */
+            if (m.type === 'attributes' && m.attributeName === 'aria-selected') {
+                var opt = m.target;
+                if (!opt._lirazHovered) {
+                    var sel = opt.getAttribute('aria-selected') === 'true';
+                    styleOption(opt, sel ? BG_SELECTED : BG_DEFAULT, sel ? TEXT_WHITE : TEXT_DEFAULT);
+                }
+            }
         });
-        /* Also re-apply to whole doc in case aria-selected changed */
-        applyDropdownStyles(pdoc);
-        applyTooltipStyles(pdoc);
         checkNavTrigger();
     });
-    dropdownObs.observe(pdoc.body, { childList: true, subtree: true });
+    dropdownObs.observe(pdoc.body, {
+        childList: true, subtree: true,
+        attributes: true, attributeFilter: ['aria-selected']
+    });
     applyDropdownStyles(pdoc);
     applyTooltipStyles(pdoc);
 
