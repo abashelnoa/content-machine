@@ -413,27 +413,31 @@ button[data-testid="generate_post_btn"] {
     transform: translateY(-1px) !important;
     box-shadow: 0 4px 20px rgba(124,58,237,0.4) !important;
 }
-/* ── Card-select buttons: override global gradient ──────────────────────────
-   All _card_select buttons have keys starting with "crd_" which Streamlit
-   sets as the HTML id. Force flat base style; per-card CSS in _card_select
-   then fine-tunes selected/unselected state on top of this. */
+/* ── Card-select buttons — dark tool-style cards ──────────────────────────
+   Base rule resets ALL crd_ buttons away from the global gradient.
+   Per-card CSS in _card_select() overrides selected vs unselected state. */
 [data-testid="stButton"] > button[id^="crd_"] {
-    background: rgba(255,255,255,0.03) !important;
-    border: 1px solid rgba(255,255,255,0.09) !important;
+    background: #1e1f26 !important;
+    border: 1px solid rgba(255,255,255,0.11) !important;
     box-shadow: none !important;
     transform: none !important;
-    border-radius: 8px !important;
-    font-size: 0.84rem !important;
+    border-radius: 10px !important;
+    font-size: 0.94rem !important;
     font-weight: 400 !important;
-    color: rgba(255,255,255,0.58) !important;
-    -webkit-text-fill-color: rgba(255,255,255,0.58) !important;
-    padding: 0.50rem 0.8rem !important;
+    color: rgba(255,255,255,0.55) !important;
+    -webkit-text-fill-color: rgba(255,255,255,0.55) !important;
+    padding: 0.88rem 1.1rem !important;
+    min-height: 66px !important;
+    line-height: 1.35 !important;
+    transition: background 150ms ease, border-color 150ms ease, color 150ms ease !important;
 }
 [data-testid="stButton"] > button[id^="crd_"]:hover {
-    background: rgba(255,255,255,0.06) !important;
+    background: #242530 !important;
+    border-color: rgba(255,255,255,0.20) !important;
     box-shadow: none !important;
     transform: none !important;
-    border-color: rgba(255,255,255,0.18) !important;
+    color: rgba(255,255,255,0.72) !important;
+    -webkit-text-fill-color: rgba(255,255,255,0.72) !important;
 }
 /* ── כל הטקסטים לבנים ── */
 *, p, span, div, label, li {
@@ -1296,29 +1300,48 @@ def _card_select(
     for item in options:
         opt_id = item[0]
         is_sel = opt_id in selected
-        bg  = "rgba(255,255,255,0.08)" if is_sel else "rgba(255,255,255,0.03)"
-        bd  = "1px solid rgba(255,255,255,0.32)" if is_sel else "1px solid rgba(255,255,255,0.09)"
-        clr = "rgba(255,255,255,0.92)" if is_sel else "rgba(255,255,255,0.58)"
-        fw  = "500" if is_sel else "400"
+        # Selected: slightly lighter charcoal + brighter neutral border + inset top highlight
+        # Unselected: base dark charcoal (overrides global rule only when needed)
+        if is_sel:
+            bg   = "#28293a"
+            bd   = "1px solid rgba(255,255,255,0.32)"
+            clr  = "rgba(255,255,255,0.92)"
+            fw   = "500"
+            shad = "inset 0 1px 0 rgba(255,255,255,0.10)"
+            hbg  = "#2d2f3e"
+            hbd  = "rgba(255,255,255,0.38)"
+            hclr = "rgba(255,255,255,0.95)"
+        else:
+            bg   = "#1e1f26"
+            bd   = "1px solid rgba(255,255,255,0.11)"
+            clr  = "rgba(255,255,255,0.55)"
+            fw   = "400"
+            shad = "none"
+            hbg  = "#242530"
+            hbd  = "rgba(255,255,255,0.20)"
+            hclr = "rgba(255,255,255,0.72)"
         css += (
             f'div[data-testid="stButton"]>button#{bpfx}_{opt_id}{{'
             f'background:{bg}!important;border:{bd}!important;'
+            f'box-shadow:{shad}!important;'
             f'color:{clr}!important;-webkit-text-fill-color:{clr}!important;'
-            f'border-radius:8px!important;font-size:0.84rem!important;'
-            f'font-weight:{fw}!important;padding:0.50rem 0.8rem!important;'
+            f'border-radius:10px!important;font-size:0.94rem!important;'
+            f'font-weight:{fw}!important;padding:0.88rem 1.1rem!important;'
+            f'min-height:66px!important;'
             f'text-align:center!important;direction:rtl!important;'
-            f'box-shadow:none!important;line-height:1.3!important;'
-            f'white-space:normal!important;}}'
+            f'line-height:1.35!important;white-space:normal!important;'
+            f'transition:background 150ms ease,border-color 150ms ease,color 150ms ease!important;}}'
             f'div[data-testid="stButton"]>button#{bpfx}_{opt_id}:hover{{'
-            f'background:{bg}!important;transform:none!important;'
-            f'box-shadow:none!important;'
-            f'border-color:rgba(255,255,255,0.22)!important;}}'
+            f'background:{hbg}!important;transform:none!important;'
+            f'box-shadow:{shad}!important;'
+            f'border-color:{hbd}!important;'
+            f'color:{hclr}!important;-webkit-text-fill-color:{hclr}!important;}}'
         )
         if recommended_ids and opt_id in recommended_ids:
             css += (
                 f'div[data-testid="stButton"]>button#{bpfx}_{opt_id}::after{{'
-                f'content:" ✓";color:rgba(110,231,183,0.85);'
-                f'font-size:0.78em;margin-right:0.25em;}}'
+                f'content:" ✓";color:rgba(110,231,183,0.80);'
+                f'font-size:0.76em;margin-right:0.25em;}}'
             )
     st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
 
