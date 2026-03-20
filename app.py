@@ -1237,40 +1237,45 @@ def _ideas_tab_action():
     st.session_state["_ideas_rerun_trigger"] = True
 
 
-def _aud_type_change(opt_id: str):
-    """on_change callback for audience-type checkboxes.
-    Enforces max-2 rule and the 'Not Sure' exclusive behaviour."""
-    st.session_state["_ideas_rerun_trigger"] = True
-    cb_key = f"aud_type_cb_{opt_id}"
-    is_checked = st.session_state.get(cb_key, False)
-    current = list(st.session_state.get("selected_audience_types", []))
+def _aud_type_change_inline(prev_selected: list) -> list:
+    """Called in the script body after rendering audience-type checkboxes.
+    Reads current checkbox states, enforces max-2 and Not-Sure exclusive rules,
+    updates session state, and returns the new selection list.
+    No on_change callback — avoids interfering with the two-rerun strategy."""
+    cur = [oid for oid, _ in AUDIENCE_TYPE_OPTIONS
+           if st.session_state.get(f"aud_type_cb_{oid}", False)]
 
-    if is_checked:
-        if opt_id == "not_sure":
-            # "Not Sure" clears every other option
+    if cur == prev_selected:
+        return prev_selected  # nothing changed
+
+    # Not-Sure exclusive rule
+    if "not_sure" in cur and len(cur) > 1:
+        if "not_sure" not in prev_selected:
+            # not_sure was just added → clear everything else
             for oid, _ in AUDIENCE_TYPE_OPTIONS:
                 if oid != "not_sure":
                     st.session_state[f"aud_type_cb_{oid}"] = False
-            st.session_state.selected_audience_types = ["not_sure"]
-            st.session_state["_aud_limit_error"] = False
+            cur = ["not_sure"]
         else:
-            # Selecting a real category → deselect "Not Sure" if present
-            if "not_sure" in current:
-                current.remove("not_sure")
-                st.session_state["aud_type_cb_not_sure"] = False
-            if len(current) >= 2:
-                # At the limit — revert this checkbox and show error
-                st.session_state[cb_key] = False
-                st.session_state["_aud_limit_error"] = True
-            else:
-                current.append(opt_id)
-                st.session_state.selected_audience_types = current
-                st.session_state["_aud_limit_error"] = False
+            # something else added while not_sure was selected → drop not_sure
+            st.session_state["aud_type_cb_not_sure"] = False
+            cur = [oid for oid in cur if oid != "not_sure"]
+
+    # Max-2 rule
+    real = [oid for oid in cur if oid != "not_sure"]
+    if len(real) > 2:
+        newly = [oid for oid in real if oid not in prev_selected]
+        if newly:
+            st.session_state[f"aud_type_cb_{newly[-1]}"] = False
+            cur = [oid for oid in cur if oid != newly[-1]]
+        st.session_state["_aud_limit_error"] = True
     else:
-        if opt_id in current:
-            current.remove(opt_id)
-        st.session_state.selected_audience_types = current
         st.session_state["_aud_limit_error"] = False
+
+    st.session_state.selected_audience_types = cur
+    # Signal tab-navigation guard (no st.rerun() — let the natural rerun proceed)
+    st.session_state["_ideas_rerun_trigger"] = True
+    return cur
 
 
 def _idea_type_change(opt_id: str):
@@ -2466,13 +2471,16 @@ with tab_ideas:
   </span>
 </div>""", unsafe_allow_html=True)
     # Initialise checkbox keys from selected_audience_types (only when not yet set)
+    _prev_aud_sel = list(st.session_state.get("selected_audience_types", []))
     for _oid, _ in AUDIENCE_TYPE_OPTIONS:
         _ck = f"aud_type_cb_{_oid}"
         if _ck not in st.session_state:
-            st.session_state[_ck] = _oid in st.session_state.get("selected_audience_types", [])
+            st.session_state[_ck] = _oid in _prev_aud_sel
+    # Render checkboxes without on_change to avoid interfering with generation reruns
     for _oid, _olabel in AUDIENCE_TYPE_OPTIONS:
-        st.checkbox(_olabel, key=f"aud_type_cb_{_oid}",
-                    on_change=_aud_type_change, args=(_oid,))
+        st.checkbox(_olabel, key=f"aud_type_cb_{_oid}")
+    # Enforce rules inline (max-2, Not-Sure exclusive) — no callback needed
+    _aud_type_change_inline(_prev_aud_sel)
     if st.session_state.get("_aud_limit_error"):
         st.warning("⚠️ ניתן לבחור עד 2 קטגוריות בלבד. כדי לבחור אפשרות נוספת, בטל סימון של אחת הנבחרות.")
     st.markdown('<div style="height:0.5rem"></div>', unsafe_allow_html=True)
