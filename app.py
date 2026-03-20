@@ -1253,7 +1253,8 @@ def _render_toggle_group(label: str, options: list, selected_key: str,
             f'border-radius:10px!important;font-size:0.84rem!important;'
             f'padding:0.38rem 0.5rem!important;transition:all 0.15s!important;}}'
         )
-    st.markdown(f'<div class="section-label">{label}</div>', unsafe_allow_html=True)
+    if label:
+        st.markdown(f'<div class="section-label">{label}</div>', unsafe_allow_html=True)
     st.markdown(f"<style>{''.join(css_parts)}</style>", unsafe_allow_html=True)
     cols = st.columns(len(options))
     for i, (opt_id, opt_label) in enumerate(options):
@@ -2383,32 +2384,26 @@ with tab_visual:
 with tab_ideas:
     import pandas as pd
 
+    # ── Main heading ──
     st.markdown("""
-<div style="
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 18px;
-    padding: 1.8rem 2rem;
-    margin-bottom: 1.5rem;
-    direction: rtl;
-    text-align: right;
-">
-    <div style="font-size:1.5rem; font-weight:700; color:white; margin-bottom:0.6rem;">
-        מחולל הרעיונות שלכם
-    </div>
-    <div style="color:rgba(255,255,255,0.65); font-size:0.92rem; line-height:1.8;">
-        כאן תוכלו לייצר בקלות מגוון רעיונות לתוכן שמותאמים בדיוק לתחום העיסוק ולקהלי היעד שלכם.<br>
-        פשוט כתבו את התחום שבו אתם עוסקים ובחרו את קהל היעד – המערכת תייצר עבורכם רשימה של 30 רעיונות שונים לתוכן שניתן לטעון ישירות למערכת.<br><br>
-        לאחר מכן, תוכלו לעבור בין הרעיונות שבחרתם וליצור תכנים איכותיים בכמויות גדולות ובמהירות.
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-    st.markdown('<div class="section-label">💡 מחולל רעיונות לתוכן</div>', unsafe_allow_html=True)
+<div style="direction:rtl; text-align:right; margin-bottom:1.6rem; margin-top:0.4rem;">
+  <div style="font-size:2.4rem; font-weight:900; color:white; letter-spacing:-0.025em; line-height:1.1;">
+    💡 מחולל הרעיונות שלכם
+  </div>
+  <div style="width:4rem; height:4px; background:linear-gradient(90deg,#a78bfa,#3b82f6);
+              border-radius:2px; margin-top:0.55rem; margin-right:0;"></div>
+  <div style="color:rgba(255,255,255,0.60); font-size:0.9rem; line-height:1.75; margin-top:0.7rem;">
+    כתבו את התחום שלכם, בחרו קהל יעד וסוג רעיונות — המערכת תייצר 30 רעיונות לתוכן בלחיצה אחת.
+  </div>
+</div>""", unsafe_allow_html=True)
 
     # ── למי אתם פונים? ──
+    st.markdown("""
+<div style="direction:rtl; text-align:right; margin-bottom:0.55rem; margin-top:0.2rem;">
+  <span style="font-size:1.6rem; font-weight:800; color:white; letter-spacing:-0.015em;">👥 למי אתם פונים?</span>
+</div>""", unsafe_allow_html=True)
     _render_toggle_group(
-        "👥 למי אתם פונים?",
+        "",
         AUDIENCE_TYPE_OPTIONS,
         selected_key="selected_audience_types",
         max_select=2,
@@ -2505,11 +2500,18 @@ with tab_ideas:
             st.caption(f"נבחרו: {', '.join(final_audience_list)}")
 
             # ── סוג הרעיונות שאני רוצה ──
+            st.markdown("""
+<div style="direction:rtl; text-align:right; margin-bottom:0.3rem; margin-top:0.8rem;">
+  <span style="font-size:1.6rem; font-weight:800; color:white; letter-spacing:-0.015em;">📂 סוג הרעיונות שאני רוצה</span>
+  <span style="display:block; font-size:0.82rem; color:rgba(167,139,250,0.85); margin-top:0.25rem; font-weight:500;">
+    ניתן לבחור עד 2 סוגים
+  </span>
+</div>""", unsafe_allow_html=True)
             _render_toggle_group(
-                "💡 סוג הרעיונות שאני רוצה",
+                "",
                 IDEA_TYPE_OPTIONS,
                 selected_key="selected_idea_types",
-                max_select=3,
+                max_select=2,
                 exclusive_id=None,
             )
             st.markdown('<div style="height:0.4rem"></div>', unsafe_allow_html=True)
