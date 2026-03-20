@@ -43,6 +43,14 @@ _AUD_IDEA_RECOMMEND = {
     "not_sure":    ["emotional", "practical"],
 }
 
+_AUD_IDEA_NOT_RECOMMEND = {
+    "individuals": ["comparison"],
+    "small_biz":   ["comparison"],
+    "companies":   ["emotional", "mistakes"],
+    "nonprofits":  ["comparison"],
+    "not_sure":    [],
+}
+
 load_dotenv()
 
 
@@ -1186,6 +1194,7 @@ def init_state():
         "_aud_limit_error": False,
         "_idea_limit_error": False,
         "_ai_aud_limit_error": False,
+        "_aud_step_confirmed": False,
         "ideas_website_input": "",
         "generated_style_guide": "",
         "style_upload_key": 0,
@@ -1286,24 +1295,25 @@ def _card_select(
     limit_error_key: str = "",
     ncols: int = 0,
     recommended_ids: list | None = None,
+    not_recommended_ids: list | None = None,
+    show_sublabels: bool = False,
 ) -> None:
-    """Minimal selectable dark-card buttons. No on_change callbacks.
-    options:         list of (id, label) or (id, label, sublabel) — sublabel ignored here
-    state_key:       session_state key holding list[str] of selected IDs
-    max_select:      0 = unlimited; >0 = cap
-    exclusive_id:    option that clears all others when selected
-    limit_error_key: session_state key for limit-reached error flag
-    ncols:           0 = all in one row; N = N columns per row
-    recommended_ids: IDs to mark with a green ✓ badge via CSS ::after
+    """Minimal selectable dark-card buttons.
+    options:              list of (id, label) or (id, label, sublabel)
+    state_key:            session_state key holding list[str] of selected IDs
+    max_select:           0 = unlimited; >0 = cap
+    exclusive_id:         option that clears all others when selected
+    limit_error_key:      session_state key for limit-reached error flag
+    ncols:                0 = all in one row; N = N columns per row
+    recommended_ids:      IDs to show "מומלץ עבורכם" badge
+    not_recommended_ids:  IDs to show "פחות רלוונטי" badge
+    show_sublabels:       render item[2] sublabel text below each button
     """
     selected = list(st.session_state.get(state_key, []))
     n = len(options)
     cpp = ncols if ncols > 0 else n
     bpfx = f"crd_{state_key}"
 
-    # Global CSS: card sizing rules for all card-group buttons — applied once.
-    # Note: per-button ID selectors don't work in Streamlit (key ≠ HTML id).
-    # Selected state is communicated via ✓ prefix in the label (see button render below).
     css = (
         f'.stButton>button[data-bpfx="{bpfx}"],div[data-testid="stButton"]:has(~.stButton)>button{{'
         f'min-height:66px!important;padding:0.82rem 1rem!important;'
@@ -1318,14 +1328,32 @@ def _card_select(
         cols = st.columns(len(row))
         for ci, item in enumerate(row):
             opt_id = item[0]; label = item[1]
+            sublabel = item[2] if len(item) > 2 else ""
             is_sel = opt_id in selected
-            # ✓ prefix = only reliable per-button visual diff in Streamlit without custom components
             display_label = f"✓  {label}" if is_sel else f"   {label}"
-            rec_mark = "  ·" if (recommended_ids and opt_id in recommended_ids and not is_sel) else ""
             with cols[ci]:
-                if st.button(display_label + rec_mark, key=f"{bpfx}_{opt_id}",
+                if st.button(display_label, key=f"{bpfx}_{opt_id}",
                              use_container_width=True):
                     clicked_id = opt_id
+                if show_sublabels and sublabel:
+                    st.markdown(
+                        f'<div style="font-size:0.82rem;color:rgba(255,255,255,0.48);'
+                        f'text-align:center;direction:rtl;margin-top:0.12rem;'
+                        f'line-height:1.3;">{sublabel}</div>',
+                        unsafe_allow_html=True,
+                    )
+                if recommended_ids and opt_id in recommended_ids:
+                    st.markdown(
+                        '<div style="font-size:0.72rem;color:rgba(110,231,183,0.80);'
+                        'text-align:center;margin-top:0.06rem;">★ מומלץ עבורכם</div>',
+                        unsafe_allow_html=True,
+                    )
+                elif not_recommended_ids and opt_id in not_recommended_ids:
+                    st.markdown(
+                        '<div style="font-size:0.72rem;color:rgba(255,255,255,0.28);'
+                        'text-align:center;margin-top:0.06rem;">פחות רלוונטי</div>',
+                        unsafe_allow_html=True,
+                    )
 
     if clicked_id is None:
         return
@@ -1346,15 +1374,20 @@ def _card_select(
                 if limit_error_key:
                     st.session_state[limit_error_key] = True
                 st.session_state[state_key] = cur
-                # No st.rerun() — natural button-click rerun preserves active tab
+                # Force rerender so the warning shows immediately
+                st.session_state["_ideas_rerun_trigger"] = True
+                st.rerun()
                 return
             if limit_error_key:
                 st.session_state[limit_error_key] = False
             cur.append(clicked_id)
 
     st.session_state[state_key] = cur
-    # Do NOT call st.rerun() — forced reruns reset the active tab to Create.
-    # st.button triggers a natural rerun automatically; that rerun preserves tab state.
+    # Rerun so buttons update immediately with ✓ state.
+    # _ideas_rerun_trigger emits the nav guard div at top level → no tab flash
+    # because the JS aria-selected check skips clicking an already-active tab.
+    st.session_state["_ideas_rerun_trigger"] = True
+    st.rerun()
 
 
 def _render_toggle_group(label: str, options: list, selected_key: str,
@@ -2584,6 +2617,7 @@ with tab_ideas:
         st.session_state.target_audiences = []
         st.session_state.selected_ai_audiences = []
         st.session_state["_ai_aud_limit_error"] = False
+        st.session_state["_aud_step_confirmed"] = False
         st.session_state.ideas_table = {}
         st.session_state.ideas_tables_history = []
         st.session_state.ideas_table_idx = 0
@@ -2660,50 +2694,66 @@ with tab_ideas:
         final_audience_list = checked_audiences + ([custom_audience.strip()] if custom_audience.strip() else [])
 
         if final_audience_list:
-            # ══ STEP 5 — Smart summary ════════════════════════════════════════
-            _aud_type_labels = {oid: lbl for oid, lbl in AUDIENCE_TYPE_OPTIONS}
-            _sel_aud_types = [a for a in st.session_state.get("selected_audience_types", []) if a != "not_sure"]
-            _aud_type_str = " ו".join(_aud_type_labels.get(a, a) for a in _sel_aud_types)
-            _domain_display = _d_raw or _w_raw or effective_input
-            _audience_str = ", ".join(final_audience_list[:3])
-            if len(final_audience_list) > 3:
-                _audience_str += f" ועוד {len(final_audience_list) - 3}"
-            _targeting_line = f"פונים ל{_aud_type_str}" if _aud_type_str else ""
+            if not st.session_state.get("_aud_step_confirmed"):
+                # ══ Step 4 Continue — gate to step 5+ ═════════════════════════
+                _, _cc4, _ = st.columns([2, 2, 2])
+                with _cc4:
+                    if st.button("המשך →", key="confirm_audience_btn", type="primary",
+                                  use_container_width=True):
+                        st.session_state["_aud_step_confirmed"] = True
+                        st.session_state["selected_idea_types"] = []
+                        st.session_state["_ideas_rerun_trigger"] = True
+                        st.rerun()
+            else:
+                # ══ STEP 5 — Smart summary ════════════════════════════════════
+                _aud_type_labels = {oid: lbl for oid, lbl in AUDIENCE_TYPE_OPTIONS}
+                _sel_aud_types = [a for a in st.session_state.get("selected_audience_types", []) if a != "not_sure"]
+                _aud_type_str = " ו".join(_aud_type_labels.get(a, a) for a in _sel_aud_types)
+                _domain_display = _d_raw or _w_raw or effective_input
+                _audience_str = ", ".join(final_audience_list[:3])
+                if len(final_audience_list) > 3:
+                    _audience_str += f" ועוד {len(final_audience_list) - 3}"
+                _targeting_line = f"פונים ל{_aud_type_str}" if _aud_type_str else ""
 
-            _, _sc, _ = st.columns([1, 6, 1])
-            with _sc:
-                _summary_lines = []
-                _summary_lines.append(
-                    f'אני מבין שאתם עוסקים בתחום '
-                    f'<strong style="color:#ffffff;">{_domain_display}</strong>'
-                    + (f', {_targeting_line}.' if _targeting_line else '.')
-                )
-                _summary_lines.append(
-                    f'בחרתם את קהלי היעד הבאים: '
-                    f'<strong style="color:#ffffff;">{_audience_str}</strong>.'
-                )
-                st.markdown(
-                    '<div style="direction:rtl;text-align:right;padding:1rem 1.2rem;'
-                    'background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.10);'
-                    'border-radius:10px;margin:1rem 0;line-height:1.9;">'
-                    + "".join(
-                        f'<div style="font-size:0.95rem;color:rgba(255,255,255,0.80);'
-                        f'margin-bottom:0.3rem;">{line}</div>'
-                        for line in _summary_lines
+                _, _sc, _ = st.columns([1, 6, 1])
+                with _sc:
+                    _summary_lines = []
+                    _summary_lines.append(
+                        f'אני מבין שאתם עוסקים בתחום '
+                        f'<strong style="color:#ffffff;">{_domain_display}</strong>'
+                        + (f', {_targeting_line}.' if _targeting_line else '.')
                     )
-                    + '<div style="font-size:0.9rem;color:rgba(255,255,255,0.50);margin-top:0.5rem;">'
-                    'בהתאם לכך, הנה סוגי התוכן שאני ממליץ לכם:</div>'
-                    '</div>',
-                    unsafe_allow_html=True,
-                )
+                    _summary_lines.append(
+                        f'בחרתם את קהלי היעד הבאים: '
+                        f'<strong style="color:#ffffff;">{_audience_str}</strong>.'
+                    )
+                    st.markdown(
+                        '<div style="direction:rtl;text-align:right;padding:1rem 1.2rem;'
+                        'background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.10);'
+                        'border-radius:10px;margin:1rem 0;line-height:1.9;">'
+                        + "".join(
+                            f'<div style="font-size:0.95rem;color:rgba(255,255,255,0.80);'
+                            f'margin-bottom:0.3rem;">{line}</div>'
+                            for line in _summary_lines
+                        )
+                        + '<div style="font-size:0.9rem;color:rgba(255,255,255,0.50);margin-top:0.5rem;">'
+                        'בהתאם לכך, הנה סוגי התוכן שאני ממליץ לכם:</div>'
+                        '</div>',
+                        unsafe_allow_html=True,
+                    )
 
-            # ══ STEP 6 — Idea type cards ══════════════════════════════════════
-            _sel_aud = st.session_state.get("selected_audience_types", [])
-            _recommended = list({t for a in _sel_aud for t in _AUD_IDEA_RECOMMEND.get(a, [])})
+                # ══ STEP 6 — Idea type cards ══════════════════════════════════
+                _sel_aud = st.session_state.get("selected_audience_types", [])
+                _recommended = list({t for a in _sel_aud for t in _AUD_IDEA_RECOMMEND.get(a, [])})
+                _not_recommended = [
+                    t for t in [o[0] for o in IDEA_TYPE_OPTIONS]
+                    if t not in _recommended
+                    and any(t in _AUD_IDEA_NOT_RECOMMEND.get(a, []) for a in _sel_aud)
+                ]
 
-            _, _itc, _ = st.columns([1, 6, 1])
-            with _itc:
-                st.markdown("""
+                _, _itc, _ = st.columns([1, 6, 1])
+                with _itc:
+                    st.markdown("""
 <div style="direction:rtl;text-align:right;margin-bottom:0.5rem;margin-top:0.4rem;">
   <div style="font-size:1.3rem;font-weight:600;color:#ffffff;">
     איזה סוג תוכן?
@@ -2712,39 +2762,33 @@ with tab_ideas:
     בחרו עד 2 סוגים
   </div>
 </div>""", unsafe_allow_html=True)
-                _card_select(
-                    [(o[0], o[1]) for o in IDEA_TYPE_OPTIONS],
-                    state_key="selected_idea_types",
-                    max_select=2,
-                    limit_error_key="_idea_limit_error",
-                    ncols=0,
-                    recommended_ids=_recommended,
-                )
-                _slcols = st.columns(len(IDEA_TYPE_OPTIONS))
-                for _ci, (_oid, _lbl, _sub) in enumerate(IDEA_TYPE_OPTIONS):
-                    with _slcols[_ci]:
-                        st.markdown(
-                            f'<div style="font-size:0.70rem;color:rgba(255,255,255,0.32);'
-                            f'text-align:center;direction:rtl;margin-top:0.18rem;">{_sub}</div>',
-                            unsafe_allow_html=True,
-                        )
-                if st.session_state.get("_idea_limit_error"):
-                    st.warning("⚠️ ניתן לבחור עד 2 סוגים. כדי לבחור סוג נוסף, בטל סימון של אחד הנבחרים.")
-                st.markdown('<div style="height:0.6rem"></div>', unsafe_allow_html=True)
+                    _card_select(
+                        IDEA_TYPE_OPTIONS,
+                        state_key="selected_idea_types",
+                        max_select=2,
+                        limit_error_key="_idea_limit_error",
+                        ncols=0,
+                        recommended_ids=_recommended,
+                        not_recommended_ids=_not_recommended,
+                        show_sublabels=True,
+                    )
+                    if st.session_state.get("_idea_limit_error"):
+                        st.warning("⚠️ ניתן לבחור עד 2 סוגים. כדי לבחור סוג נוסף, בטל סימון של אחד הנבחרים.")
+                    st.markdown('<div style="height:0.6rem"></div>', unsafe_allow_html=True)
 
-            # ══ STEP 7 — Generate Ideas Table button ══════════════════════════
-            _, _gc, _ = st.columns([2, 2, 2])
-            with _gc:
-                if st.button("צור טבלת רעיונות ←", key="gen_ideas_table_btn",
-                              use_container_width=True, type="primary"):
-                    st.session_state["_pending_table_gen"] = {
-                        "domain":     effective_input,
-                        "audience":   ", ".join(final_audience_list),
-                        "mode":       "new",
-                        "idea_types": st.session_state.get("selected_idea_types") or ["emotional", "practical"],
-                    }
-                    st.session_state["_jump_to_ideas"] = True
-                    st.rerun()
+                # ══ STEP 7 — Generate Ideas Table button ══════════════════════
+                _, _gc, _ = st.columns([2, 2, 2])
+                with _gc:
+                    if st.button("צור טבלת רעיונות ←", key="gen_ideas_table_btn",
+                                  use_container_width=True, type="primary"):
+                        st.session_state["_pending_table_gen"] = {
+                            "domain":     effective_input,
+                            "audience":   ", ".join(final_audience_list),
+                            "mode":       "new",
+                            "idea_types": st.session_state.get("selected_idea_types") or ["emotional", "practical"],
+                        }
+                        st.session_state["_jump_to_ideas"] = True
+                        st.rerun()
         else:
             _, _ic, _ = st.columns([1, 5, 1])
             with _ic:
