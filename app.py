@@ -1345,16 +1345,15 @@ def _card_select(
                 if limit_error_key:
                     st.session_state[limit_error_key] = True
                 st.session_state[state_key] = cur
-                st.session_state["_ideas_rerun_trigger"] = True
-                st.rerun()
+                # No st.rerun() — natural button-click rerun preserves active tab
                 return
             if limit_error_key:
                 st.session_state[limit_error_key] = False
             cur.append(clicked_id)
 
     st.session_state[state_key] = cur
-    st.session_state["_ideas_rerun_trigger"] = True
-    st.rerun()
+    # Do NOT call st.rerun() — forced reruns reset the active tab to Create.
+    # st.button triggers a natural rerun automatically; that rerun preserves tab state.
 
 
 def _render_toggle_group(label: str, options: list, selected_key: str,
@@ -2513,11 +2512,11 @@ with tab_ideas:
     with _hc:
         st.markdown("""
 <div style="direction:rtl;text-align:right;margin-bottom:1.4rem;margin-top:0.6rem;">
-  <div style="font-size:1.65rem;font-weight:700;color:rgba(255,255,255,0.90);
+  <div style="font-size:2.0rem;font-weight:700;color:#ffffff;
               letter-spacing:-0.01em;line-height:1.25;">
     מה התחום או האתר שלכם?
   </div>
-  <div style="font-size:0.85rem;color:rgba(255,255,255,0.42);margin-top:0.3rem;">
+  <div style="font-size:1.0rem;color:rgba(255,255,255,0.72);margin-top:0.4rem;line-height:1.5;">
     הזינו תחום עיסוק, כתובת אתר, או שניהם
   </div>
 </div>""", unsafe_allow_html=True)
@@ -2549,11 +2548,11 @@ with tab_ideas:
     _, _ac, _ = st.columns([1, 6, 1])
     with _ac:
         st.markdown("""
-<div style="direction:rtl;text-align:right;margin-bottom:0.45rem;margin-top:1.1rem;">
-  <div style="font-size:0.95rem;font-weight:600;color:rgba(255,255,255,0.78);">
+<div style="direction:rtl;text-align:right;margin-bottom:0.5rem;margin-top:1.1rem;">
+  <div style="font-size:1.3rem;font-weight:600;color:#ffffff;">
     למי אתם פונים?
   </div>
-  <div style="font-size:0.78rem;color:rgba(255,255,255,0.36);margin-top:0.12rem;">
+  <div style="font-size:0.92rem;color:rgba(255,255,255,0.65);margin-top:0.18rem;">
     בחרו עד 2 אפשרויות
   </div>
 </div>""", unsafe_allow_html=True)
@@ -2620,8 +2619,8 @@ with tab_ideas:
         _, _auc, _ = st.columns([1, 6, 1])
         with _auc:
             st.markdown("""
-<div style="direction:rtl;text-align:right;margin-bottom:0.45rem;">
-  <div style="font-size:0.95rem;font-weight:600;color:rgba(255,255,255,0.78);">
+<div style="direction:rtl;text-align:right;margin-bottom:0.5rem;">
+  <div style="font-size:1.3rem;font-weight:600;color:#ffffff;">
     בחרו קהל יעד
   </div>
 </div>""", unsafe_allow_html=True)
@@ -2654,11 +2653,11 @@ with tab_ideas:
             _, _itc, _ = st.columns([1, 6, 1])
             with _itc:
                 st.markdown("""
-<div style="direction:rtl;text-align:right;margin-bottom:0.45rem;margin-top:0.9rem;">
-  <div style="font-size:0.95rem;font-weight:600;color:rgba(255,255,255,0.78);">
+<div style="direction:rtl;text-align:right;margin-bottom:0.5rem;margin-top:0.9rem;">
+  <div style="font-size:1.3rem;font-weight:600;color:#ffffff;">
     איזה סוג תוכן?
   </div>
-  <div style="font-size:0.78rem;color:rgba(255,255,255,0.36);margin-top:0.12rem;">
+  <div style="font-size:0.92rem;color:rgba(255,255,255,0.65);margin-top:0.18rem;">
     בחרו עד 2 סוגים
   </div>
 </div>""", unsafe_allow_html=True)
